@@ -1,0 +1,373 @@
+{% extends "base.html" %}
+
+{% block title %}{{ project.name }} - Моделирование фильтрации нефти{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1>{{ project.name }}</h1>
+        <p class="lead">{{ project.description }}</p>
+
+        <div class="d-flex mb-3">
+            <!-- Тип модели -->
+            <span class="badge project-type-{{ project.model_type }} me-2">
+                {{ project.model_type|capitalize }}
+            </span>
+
+            <!-- Тип породы -->
+            {% if project.rock_type %}
+            <span class="badge bg-secondary me-2">
+                <i class="fas fa-mountain"></i> {{ project.rock_type }}
+            </span>
+            {% endif %}
+
+            <!-- Дата создания -->
+            <span class="text-muted">
+                <i class="fas fa-calendar-alt"></i> Создано: {{ project.created_at.strftime('%d.%m.%Y %H:%M') }}
+            </span>
+        </div>
+    </div>
+    <div class="col-md-4 text-md-end">
+        <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary mb-2 me-2">
+            <i class="fas fa-arrow-left"></i> К проектам
+        </a>
+        <a href="{{ url_for('main.edit_project', project_id=project.id) }}" class="btn btn-outline-primary mb-2">
+            <i class="fas fa-edit"></i> Редактировать
+        </a>
+    </div>
+</div>
+
+<!-- Вкладки -->
+<ul class="nav nav-tabs mb-4" id="projectTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="parameters-tab" data-bs-toggle="tab" data-bs-target="#parameters" type="button" role="tab" aria-controls="parameters" aria-selected="true">
+            <i class="fas fa-sliders-h"></i> Параметры
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="data-tab" data-bs-toggle="tab" data-bs-target="#data" type="button" role="tab" aria-controls="data" aria-selected="false">
+            <i class="fas fa-database"></i> Данные
+        </button>
+    </li>
+    {% if results %}
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="results-tab" data-bs-toggle="tab" data-bs-target="#results" type="button" role="tab" aria-controls="results" aria-selected="false">
+            <i class="fas fa-chart-bar"></i> Результаты
+        </button>
+    </li>
+    {% endif %}
+</ul>
+
+<!-- Содержимое вкладок -->
+<div class="tab-content" id="projectTabsContent">
+    <!-- Вкладка с параметрами -->
+    <div class="tab-pane fade show active" id="parameters" role="tabpanel" aria-labelledby="parameters-tab">
+        <div class="row">
+            <div class="col-md-8">
+                <!-- Параметры модели -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Параметры модели</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Параметр</th>
+                                        <th>Значение</th>
+                                        <th>Единица измерения</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% if model_params.length %}
+                                    <tr>
+                                        <td>Длина пласта</td>
+                                        <td>{{ model_params.length }}</td>
+                                        <td>м</td>
+                                    </tr>
+                                    {% endif %}
+
+                                    {% if model_params.porosity %}
+                                    <tr>
+                                        <td>Пористость</td>
+                                        <td>{{ model_params.porosity }}</td>
+                                        <td>д.ед.</td>
+                                    </tr>
+                                    {% endif %}
+
+                                    {% if model_params.mu_oil %}
+                                    <tr>
+                                        <td>Вязкость нефти</td>
+                                        <td>{{ model_params.mu_oil }}</td>
+                                        <td>мПа·с</td>
+                                    </tr>
+                                    {% endif %}
+
+                                    {% if model_params.mu_water %}
+                                    <tr>
+                                        <td>Вязкость воды</td>
+                                        <td>{{ model_params.mu_water }}</td>
+                                        <td>мПа·с</td>
+                                    </tr>
+                                    {% endif %}
+
+                                    {% if model_params.initial_water_saturation %}
+                                    <tr>
+                                        <td>Начальная водонасыщенность</td>
+                                        <td>{{ model_params.initial_water_saturation }}</td>
+                                        <td>д.ед.</td>
+                                    </tr>
+                                    {% endif %}
+
+                                    {% if model_params.residual_oil_saturation %}
+                                    <tr>
+                                        <td>Остаточная нефтенасыщенность</td>
+                                        <td>{{ model_params.residual_oil_saturation }}</td>
+                                        <td>д.ед.</td>
+                                    </tr>
+                                    {% endif %}
+
+                                    {% if model_params.entry_pressure %}
+                                    <tr>
+                                        <td>Давление входа</td>
+                                        <td>{{ model_params.entry_pressure }}</td>
+                                        <td>МПа</td>
+                                    </tr>
+                                    {% endif %}
+
+                                    {% if model_params.pore_distribution_index %}
+                                    <tr>
+                                        <td>Индекс распределения пор</td>
+                                        <td>{{ model_params.pore_distribution_index }}</td>
+                                        <td>отн.ед.</td>
+                                    </tr>
+                                    {% endif %}
+
+                                    {% if model_params.wettability_factor %}
+                                    <tr>
+                                        <td>Коэффициент смачиваемости</td>
+                                        <td>{{ model_params.wettability_factor }}</td>
+                                        <td>отн.ед.</td>
+                                    </tr>
+                                    {% endif %}
+
+                                    {% if project.model_type == 'carbonate' %}
+                                    {% if model_params.fracture_porosity %}
+                                    <tr>
+                                        <td>Пористость трещин</td>
+                                        <td>{{ model_params.fracture_porosity }}</td>
+                                        <td>д.ед.</td>
+                                    </tr>
+                                    {% endif %}
+
+                                    {% if model_params.matrix_porosity %}
+                                    <tr>
+                                        <td>Пористость матрицы</td>
+                                        <td>{{ model_params.matrix_porosity }}</td>
+                                        <td>д.ед.</td>
+                                    </tr>
+                                    {% endif %}
+
+                                    {% if model_params.fracture_permeability %}
+                                    <tr>
+                                        <td>Проницаемость трещин</td>
+                                        <td>{{ model_params.fracture_permeability }}</td>
+                                        <td>мД</td>
+                                    </tr>
+                                    {% endif %}
+
+                                    {% if model_params.matrix_permeability %}
+                                    <tr>
+                                        <td>Проницаемость матрицы</td>
+                                        <td>{{ model_params.matrix_permeability }}</td>
+                                        <td>мД</td>
+                                    </tr>
+                                    {% endif %}
+
+                                    {% if model_params.shape_factor %}
+                                    <tr>
+                                        <td>Форм-фактор</td>
+                                        <td>{{ model_params.shape_factor }}</td>
+                                        <td>отн.ед.</td>
+                                    </tr>
+                                    {% endif %}
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <!-- Запуск моделирования -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Запуск моделирования</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>Запустите моделирование, чтобы получить результаты расчета фильтрации нефти в пористой среде.</p>
+                       <form action="{{ url_for('main.run_project', project_id=project.id) }}" method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="btn btn-primary w-100">
+        <i class="fas fa-play-circle"></i> Запустить моделирование
+    </button>
+</form>
+
+                        {% if results %}
+                        <div class="mt-3">
+                            <p class="text-muted">
+                                <i class="fas fa-info-circle"></i> Последний запуск: {{ results.run_date.strftime('%d.%m.%Y %H:%M') }}
+                            </p>
+                            <p class="text-muted">
+                                <i class="fas fa-clock"></i> Время выполнения: {{ '%.2f'|format(results.runtime) }} с
+                            </p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Информация о проекте -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Информация о проекте</h5>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>Создан:</strong> {{ project.created_at.strftime('%d.%m.%Y %H:%M') }}</p>
+                        <p><strong>Последнее обновление:</strong> {{ project.updated_at.strftime('%d.%m.%Y %H:%M') }}</p>
+                        <p><strong>Количество запусков:</strong> {{ project.results.count() }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Вкладка с данными -->
+    <div class="tab-pane fade" id="data" role="tabpanel" aria-labelledby="data-tab">
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Загруженные файлы данных</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if project.data and project.data.get_uploaded_files() %}
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Тип данных</th>
+                                        <th>Имя файла</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for data_type, filename in project.data.get_uploaded_files().items() %}
+                                    <tr>
+                                        <td>
+                                            {% if data_type == 'rock_properties' %}
+                                            Свойства породы
+                                            {% elif data_type == 'capillary_pressure' %}
+                                            Капиллярное давление
+                                            {% elif data_type == 'relative_perm' %}
+                                            Относительная проницаемость
+                                            {% elif data_type == 'pvt_data' %}
+                                            PVT-данные
+                                            {% elif data_type == 'production_data' %}
+                                            Данные добычи
+                                            {% else %}
+                                            {{ data_type }}
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ filename }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="alert alert-info">
+                            <p>Нет загруженных файлов данных. Вы можете добавить файлы данных при <a href="{{ url_for('main.edit_project', project_id=project.id) }}">редактировании проекта</a>.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Информация о форматах файлов</h5>
+                    </div>
+                    <div class="card-body">
+                        <h6>Требования к файлам данных:</h6>
+                        <ul>
+                            <li>Формат файлов: CSV, Excel (.xlsx, .xls)</li>
+                            <li>Разделитель для CSV: запятая или точка с запятой</li>
+                            <li>Первая строка должна содержать названия колонок</li>
+                        </ul>
+
+                        <h6>Обязательные колонки:</h6>
+                        <ul>
+                            <li><strong>Свойства породы:</strong> ID_Sample, Porosity_fr, Permeability_mD, Rock_Type</li>
+                            <li><strong>Капиллярное давление:</strong> ID_Sample, Water_Saturation, Pc_Drainage_MPa</li>
+                            <li><strong>Относительная проницаемость:</strong> ID_Sample, Water_Saturation, Krw_Drainage, Kro_Drainage</li>
+                            <li><strong>PVT-данные:</strong> Pressure_MPa, Oil_Viscosity_cP</li>
+                            <li><strong>Данные добычи:</strong> Date, Oil_Rate_m3_day, Water_Rate_m3_day</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Вкладка с результатами -->
+    {% if results %}
+    <div class="tab-pane fade" id="results" role="tabpanel" aria-labelledby="results-tab">
+        <!-- Сводка результатов -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Сводка результатов</h5>
+            </div>
+            <div class="card-body">
+                <div id="results-summary"></div>
+            </div>
+        </div>
+
+        <!-- Визуализации -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Визуализация результатов</h5>
+            </div>
+            <div class="card-body">
+                <!-- Контейнер для визуализаций с данными для JavaScript -->
+                <div id="visualization-container" data-project-id="{{ project.id }}" data-results="{{ results.result_data }}"></div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if results %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Инициализация всплывающих подсказок
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
+    // Загрузка вкладки с результатами, если она указана в URL
+    if (window.location.hash === '#results') {
+        const resultsTab = document.getElementById('results-tab');
+        if (resultsTab) {
+            new bootstrap.Tab(resultsTab).show();
+        }
+    }
+});
+</script>
+{% endif %}
+{% endblock %}

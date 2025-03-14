@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}Мои проекты - Моделирование фильтрации нефти{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1>Мои проекты</h1>
+        <p class="lead">Управление и просмотр ваших проектов моделирования фильтрации нефти.</p>
+    </div>
+    <div class="col-md-4 text-md-end">
+        <a href="{{ url_for('main.new_project') }}" class="btn btn-primary">
+            <i class="fas fa-plus-circle"></i> Создать проект
+        </a>
+    </div>
+</div>
+
+<!-- Статистика -->
+<div class="dashboard-stats mb-4">
+    <div class="stat-card">
+        <p>Всего проектов</p>
+        <h2>{{ projects|length }}</h2>
+    </div>
+    <div class="stat-card">
+        <p>Последнее обновление</p>
+        <h2>
+            {% if projects %}
+            {{ projects[0].updated_at.strftime('%d.%m.%Y') }}
+            {% else %}
+            -
+            {% endif %}
+        </h2>
+    </div>
+    <div class="stat-card">
+        <p>Завершенных расчетов</p>
+        <h2>
+            {% set completed = namespace(count=0) %}
+            {% for project in projects %}
+                {% if project.results.count() > 0 %}
+                    {% set completed.count = completed.count + 1 %}
+                {% endif %}
+            {% endfor %}
+            {{ completed.count }}
+        </h2>
+    </div>
+</div>
+
+<!-- Список проектов -->
+{% if projects %}
+<div class="row" id="projects-container">
+    {% for project in projects %}
+    <div class="col-md-6 col-lg-4 mb-4">
+        <div class="card project-card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">{{ project.name }}</h5>
+                <span class="badge project-type-{{ project.model_type }}">{{ project.model_type|capitalize }}</span>
+            </div>
+            <div class="card-body">
+                <p>
+                    <small class="text-muted">
+                        <i class="fas fa-clock"></i> Создано: {{ project.created_at.strftime('%d.%m.%Y %H:%M') }}
+                    </small>
+                </p>
+                <p class="card-text">{{ project.description|truncate(100) }}</p>
+
+                {% if project.rock_type %}
+                <p>
+                    <span class="badge bg-secondary">
+                        <i class="fas fa-mountain"></i> {{ project.rock_type }}
+                    </span>
+                </p>
+                {% endif %}
+
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-muted">
+                        {% set result_count = project.results.count() %}
+                        {% if result_count > 0 %}
+                        <i class="fas fa-chart-line"></i> {{ result_count }} результат{{ 'ов' if result_count > 1 else '' }}
+                        {% else %}
+                        <i class="fas fa-hourglass-start"></i> Нет результатов
+                        {% endif %}
+                    </small>
+                    <div class="btn-group">
+                        <a href="{{ url_for('main.project_details', project_id=project.id) }}" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-eye"></i>
+                        </a>
+                        <a href="{{ url_for('main.edit_project', project_id=project.id) }}" class="btn btn-sm btn-outline-secondary">
+                            <i class="fas fa-edit"></i>
+                        </a>
+                        <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ project.id }}">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно подтверждения удаления -->
+    <div class="modal fade" id="deleteModal{{ project.id }}" tabindex="-1" aria-labelledby="deleteModalLabel{{ project.id }}" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteModalLabel{{ project.id }}">Подтверждение удаления</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Вы уверены, что хотите удалить проект <strong>{{ project.name }}</strong>?</p>
+                    <p class="text-danger">Это действие невозможно отменить.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <form action="{{ url_for('main.delete_project', project_id=project.id) }}" method="post">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-danger">Удалить</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="alert alert-info">
+    <p>У вас пока нет проектов. Создайте свой первый проект, чтобы начать работу.</p>
+    <a href="{{ url_for('main.new_project') }}" class="btn btn-primary mt-2">
+        <i class="fas fa-plus-circle"></i> Создать проект
+    </a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Инициализация всплывающих подсказок
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+</script>
+{% endblock %}

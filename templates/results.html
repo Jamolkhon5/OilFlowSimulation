@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}Результаты моделирования - {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1>Результаты моделирования</h1>
+        <p class="lead">Проект: {{ project.name }}</p>
+    </div>
+    <div class="col-md-4 text-md-end">
+        <a href="{{ url_for('main.project_details', project_id=project.id) }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Вернуться к проекту
+        </a>
+    </div>
+</div>
+
+{% if result.status == 'error' %}
+<div class="alert alert-danger">
+    <h4 class="alert-heading">Ошибка при моделировании</h4>
+    <p>При выполнении моделирования произошла ошибка:</p>
+    <pre>{{ result.error_message }}</pre>
+</div>
+{% else %}
+
+<!-- Сводка результатов -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Информация о расчете</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <p><strong>Дата выполнения:</strong> {{ result.run_date.strftime('%d.%m.%Y %H:%M') }}</p>
+                <p><strong>Время выполнения:</strong> {{ '%.2f'|format(result.runtime) }} сек.</p>
+                <p><strong>Статус:</strong>
+                    {% if result.status == 'success' %}
+                    <span class="badge bg-success">Успешно</span>
+                    {% elif result.status == 'warning' %}
+                    <span class="badge bg-warning">С предупреждениями</span>
+                    {% else %}
+                    <span class="badge bg-secondary">{{ result.status }}</span>
+                    {% endif %}
+                </p>
+            </div>
+            <div class="col-md-6">
+                <p><strong>Тип модели:</strong>
+                    {% if project.model_type == 'carbonate' %}
+                    <span class="badge project-type-carbonate">Карбонатная</span>
+                    {% else %}
+                    <span class="badge project-type-basic">Базовая</span>
+                    {% endif %}
+                </p>
+                <p><strong>Тип породы:</strong> {{ project.rock_type or 'Не указан' }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Основные результаты -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Основные результаты</h5>
+    </div>
+    <div class="card-body">
+        <div id="results-summary"></div>
+    </div>
+</div>
+
+<!-- Вкладки для визуализаций -->
+<div class="card mb-4">
+    <div class="card-header">
+        <ul class="nav nav-tabs card-header-tabs" id="visualizationTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="saturation-tab" data-bs-toggle="tab" data-bs-target="#saturation" type="button" role="tab" aria-controls="saturation" aria-selected="true">
+                    <i class="fas fa-water"></i> Насыщенность
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="recovery-tab" data-bs-toggle="tab" data-bs-target="#recovery" type="button" role="tab" aria-controls="recovery" aria-selected="false">
+                    <i class="fas fa-chart-line"></i> Нефтеотдача
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="capillary-tab" data-bs-toggle="tab" data-bs-target="#capillary" type="button" role="tab" aria-controls="capillary" aria-selected="false">
+                    <i class="fas fa-tint"></i> Капиллярные эффекты
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="parameters-tab" data-bs-toggle="tab" data-bs-target="#parameters" type="button" role="tab" aria-controls="parameters" aria-selected="false">
+                    <i class="fas fa-sliders-h"></i> Параметры
+                </button>
+            </li>
+        </ul>
+    </div>
+    <div class="card-body">
+        <div class="tab-content" id="visualizationTabContent">
+            <!-- Вкладка насыщенности -->
+            <div class="tab-pane fade show active" id="saturation" role="tabpanel" aria-labelledby="saturation-tab">
+                <div class="row">
+                    <div class="col-12 mb-4">
+                        <h5>Профили насыщенности</h5>
+                        <div id="saturation-profiles" style="height: 500px;"></div>
+                    </div>
+                    <div class="col-12 mb-4">
+                        <h5>Эволюция насыщенности</h5>
+                        <div id="saturation-evolution" style="height: 500px;"></div>
+                    </div>
+                    <div class="col-12">
+                        <h5>Разница в насыщенности (с учетом капиллярных эффектов - без учета)</h5>
+                        <div id="saturation-difference" style="height: 400px;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Вкладка нефтеотдачи -->
+            <div class="tab-pane fade" id="recovery" role="tabpanel" aria-labelledby="recovery-tab">
+                <div class="row">
+                    <div class="col-12 mb-4">
+                        <h5>Коэффициент нефтеотдачи</h5>
+                        <div id="recovery-factor" style="height: 500px;"></div>
+                    </div>
+                    <div class="col-12">
+                        <h5>Время прорыва воды</h5>
+                        <div id="breakthrough-time" style="height: 400px;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Вкладка капиллярных эффектов -->
+            <div class="tab-pane fade" id="capillary" role="tabpanel" aria-labelledby="capillary-tab">
+                <div class="row">
+                    <div class="col-12 mb-4">
+                        <h5>Капиллярное давление</h5>
+                        <div id="capillary-pressure" style="height: 500px;"></div>
+                    </div>
+                    <div class="col-12 mb-4">
+                        <h5>Функция Баклея-Леверетта</h5>
+                        <div id="fractional-flow" style="height: 400px;"></div>
+                    </div>
+                    <div class="col-12">
+                        <h5>Относительная проницаемость</h5>
+                        <div id="relative-permeability" style="height: 400px;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Вкладка параметров -->
+            <div class="tab-pane fade" id="parameters" role="tabpanel" aria-labelledby="parameters-tab">
+                <div id="model-parameters-summary"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Контейнер для визуализаций с данными для JavaScript -->
+<div id="visualization-container" data-project-id="{{ project.id }}" data-results="{{ results_data }}"></div>
+
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Инициализация всплывающих подсказок
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
+    // Получение данных результатов из контейнера
+    const visualizationContainer = document.getElementById('visualization-container');
+    if (visualizationContainer) {
+        const projectId = visualizationContainer.dataset.projectId;
+        const resultsDataStr = visualizationContainer.dataset.results;
+
+        console.log("Project ID:", projectId);
+        console.log("Results data length:", resultsDataStr ? resultsDataStr.length : 0);
+
+        if (projectId && resultsDataStr) {
+            try {
+                const results = JSON.parse(resultsDataStr);
+                console.log("Parsed results:", results);
+
+                // Создаем сводную таблицу результатов
+                const summaryContainer = document.getElementById('results-summary');
+                if (summaryContainer) {
+                    createResultsSummaryTable('results-summary', results);
+                }
+
+                // Создаем сводку параметров модели
+                const parametersContainer = document.getElementById('model-parameters-summary');
+                if (parametersContainer && results.parameters) {
+                    createModelParametersSummary('model-parameters-summary', results.parameters);
+                }
+
+                // Загружаем визуализации
+                if (results.visualizations) {
+                    console.log("Available visualizations:", results.visualizations);
+                    for (const [vizName, isAvailable] of Object.entries(results.visualizations)) {
+                        if (isAvailable) {
+                            const containerId = vizName.replace(/_/g, '-');
+                            console.log(`Loading visualization ${vizName} into #${containerId}`);
+                            loadVisualization(containerId, projectId, vizName);
+                        }
+                    }
+                } else {
+                    console.error("No visualizations data available in results");
+                }
+            } catch (e) {
+                console.error('Error parsing results data:', e);
+                visualizationContainer.innerHTML = '<div class="alert alert-danger">Ошибка при загрузке данных результатов</div>';
+            }
+        } else {
+            console.error("Missing project ID or results data");
+        }
+    } else {
+        console.error("Visualization container not found");
+    }
+});
+</script>
+{% endblock %}

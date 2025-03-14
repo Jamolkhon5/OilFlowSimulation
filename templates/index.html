@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}Главная - Моделирование фильтрации нефти{% endblock %}
+
+{% block content %}
+<!-- Блок описания -->
+<section class="hero-section">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-7 mb-4 mb-lg-0">
+                <h1>Моделирование одномерной фильтрации нефти в пористой среде</h1>
+                <p class="lead">
+                    Эффективное численное моделирование фильтрации нефти с учетом капиллярных эффектов.
+                    Создано для инженеров и исследователей в нефтегазовой отрасли.
+                </p>
+                <div class="d-grid gap-2 d-md-flex">
+                    {% if current_user.is_authenticated %}
+                    <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-project-diagram"></i> Мои проекты
+                    </a>
+                    <a href="{{ url_for('main.new_project') }}" class="btn btn-outline-light btn-lg">
+                        <i class="fas fa-plus-circle"></i> Создать проект
+                    </a>
+                    {% else %}
+                    <a href="{{ url_for('auth.register') }}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-user-plus"></i> Регистрация
+                    </a>
+                    <a href="{{ url_for('auth.login') }}" class="btn btn-outline-light btn-lg">
+                        <i class="fas fa-sign-in-alt"></i> Вход
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <img src="{{ url_for('static', filename='img/oil_filtration.png') }}" alt="Модель фильтрации нефти" class="img-fluid rounded shadow">
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Возможности системы -->
+<section class="features-section py-5">
+    <div class="container">
+        <h2 class="text-center mb-5">Ключевые возможности</h2>
+        <div class="row">
+            <div class="col-md-4 mb-4">
+                <div class="card feature-card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-calculator feature-icon"></i>
+                        <h5 class="card-title">Точные расчеты</h5>
+                        <p class="card-text">Эффективная численная модель одномерной фильтрации нефти методом апвинд с учетом капиллярных эффектов.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="card feature-card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-chart-line feature-icon"></i>
+                        <h5 class="card-title">Наглядная визуализация</h5>
+                        <p class="card-text">Интерактивные графики профилей насыщенности, коэффициента нефтеотдачи и капиллярного давления.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="card feature-card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-database feature-icon"></i>
+                        <h5 class="card-title">Импорт данных</h5>
+                        <p class="card-text">Возможность использования реальных данных о свойствах породы, капиллярном давлении и относительной проницаемости.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row mt-4">
+            <div class="col-md-4 mb-4">
+                <div class="card feature-card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-layer-group feature-icon"></i>
+                        <h5 class="card-title">Карбонатные коллекторы</h5>
+                        <p class="card-text">Специализированная модель для карбонатных коллекторов с учетом двойной пористости.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="card feature-card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-sliders-h feature-icon"></i>
+                        <h5 class="card-title">Гибкие параметры</h5>
+                        <p class="card-text">Возможность настройки всех параметров модели с удобным интерфейсом и предустановленными значениями.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="card feature-card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-file-export feature-icon"></i>
+                        <h5 class="card-title">Экспорт результатов</h5>
+                        <p class="card-text">Сохранение и экспорт результатов моделирования в удобном формате для дальнейшего анализа.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Преимущества -->
+<section class="benefits-section py-5 bg-light">
+    <div class="container">
+        <h2 class="text-center mb-5">Почему именно наша система?</h2>
+        <div class="row">
+            <div class="col-lg-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title"><i class="fas fa-check-circle text-success"></i> Научная обоснованность</h5>
+                        <p class="card-text">Модель основана на современных исследованиях в области гидродинамики пласта и учитывает важные физические эффекты.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title"><i class="fas fa-check-circle text-success"></i> Простота использования</h5>
+                        <p class="card-text">Интуитивно понятный интерфейс и подробная документация делают работу с системой удобной и эффективной.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title"><i class="fas fa-check-circle text-success"></i> Скорость расчетов</h5>
+                        <p class="card-text">Оптимизированные алгоритмы обеспечивают быстрое выполнение даже сложных расчетов с высокой точностью.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title"><i class="fas fa-check-circle text-success"></i> Интеграция с реальными данными</h5>
+                        <p class="card-text">Возможность загрузки и использования данных из лабораторных исследований и промысловых измерений.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Призыв к действию -->
+<section class="cta-section py-5">
+    <div class="container text-center">
+        <h2 class="mb-4">Готовы начать моделирование?</h2>
+        <p class="lead mb-4">Создайте свой первый проект прямо сейчас и оцените возможности системы.</p>
+        <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+            {% if current_user.is_authenticated %}
+            <a href="{{ url_for('main.new_project') }}" class="btn btn-primary btn-lg">
+                <i class="fas fa-plus-circle"></i> Создать проект
+            </a>
+            <a href="{{ url_for('main.help_page') }}" class="btn btn-outline-primary btn-lg">
+                <i class="fas fa-question-circle"></i> Справка
+            </a>
+            {% else %}
+            <a href="{{ url_for('auth.register') }}" class="btn btn-primary btn-lg">
+                <i class="fas fa-user-plus"></i> Регистрация
+            </a>
+            <a href="{{ url_for('main.help_page') }}" class="btn btn-outline-primary btn-lg">
+                <i class="fas fa-question-circle"></i> Справка
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endblock %}

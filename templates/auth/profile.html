@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block title %}Профиль - Моделирование фильтрации нефти{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1>Профиль пользователя</h1>
+        <p class="lead">Управление личной информацией и настройками аккаунта.</p>
+    </div>
+    <div class="col-md-4 text-md-end">
+        <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> К проектам
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-4 mb-4">
+        <!-- Карточка с информацией о пользователе -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Информация о пользователе</h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-4">
+                    <div class="avatar avatar-xl">
+                        <span class="avatar-text rounded-circle bg-primary">
+                            {{ current_user.username[0] | upper }}
+                        </span>
+                    </div>
+                    <h4 class="mt-2">{{ current_user.username }}</h4>
+                    <p class="text-muted">{{ current_user.email }}</p>
+                </div>
+
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>Компания</span>
+                        <span>{{ current_user.company or '-' }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>Должность</span>
+                        <span>{{ current_user.position or '-' }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>Дата регистрации</span>
+                        <span>{{ current_user.created_at.strftime('%d.%m.%Y') }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>Последний вход</span>
+                        <span>{{ current_user.last_login.strftime('%d.%m.%Y %H:%M') if current_user.last_login else '-' }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>Количество проектов</span>
+                        <span>{{ current_user.get_projects_count() }}</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        <!-- Форма обновления профиля -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Обновление профиля</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    <!-- CSRF токен -->
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="username" class="form-label">Имя пользователя <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="username" name="username" value="{{ current_user.username }}" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="email" class="form-label">Email <span class="text-danger">*</span></label>
+                                <input type="email" class="form-control" id="email" value="{{ current_user.email }}" readonly>
+                                <div class="form-text">Email не может быть изменен.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="company" class="form-label">Компания</label>
+                                <input type="text" class="form-control" id="company" name="company" value="{{ current_user.company or '' }}">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="position" class="form-label">Должность</label>
+                                <input type="text" class="form-control" id="position" name="position" value="{{ current_user.position or '' }}">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">Обновить профиль</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Форма изменения пароля -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Изменение пароля</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    <!-- CSRF токен -->
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+
+                    <div class="form-group mb-3">
+                        <label for="current_password" class="form-label">Текущий пароль <span class="text-danger">*</span></label>
+                        <input type="password" class="form-control" id="current_password" name="current_password">
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <label for="new_password" class="form-label">Новый пароль <span class="text-danger">*</span></label>
+                        <input type="password" class="form-control" id="new_password" name="new_password">
+                        <div class="form-text">Пароль должен содержать не менее 8 символов.</div>
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <label for="new_password_confirm" class="form-label">Подтверждение нового пароля <span class="text-danger">*</span></label>
+                        <input type="password" class="form-control" id="new_password_confirm" name="new_password_confirm">
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">Изменить пароль</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .avatar {
+        display: inline-block;
+        position: relative;
+    }
+
+    .avatar-xl {
+        width: 80px;
+        height: 80px;
+    }
+
+    .avatar-text {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-weight: bold;
+        font-size: 2rem;
+        color: white;
+    }
+</style>
+{% endblock %}
