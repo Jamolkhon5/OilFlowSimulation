@@ -1,43 +1,7 @@
 // charts.js - Скрипты для визуализации результатов моделирования
 
 
-function decodeBinaryData(data) {
-    if (!data) return data;
 
-    // Рекурсивно обходим объект и декодируем бинарные данные
-    if (typeof data === 'object') {
-        if (data.bdata && data.dtype) {
-            // Пробуем создать простой массив вместо бинарных данных
-            try {
-                // Создаем массив с случайными данными для демонстрации
-                // В реальном случае здесь должно быть декодирование base64
-                const length = Math.ceil(data.bdata.length / 10); // Примерная длина массива
-                const result = [];
-                for (let i = 0; i < length; i++) {
-                    result.push(i * 0.1); // Простые последовательные значения
-                }
-                return result;
-            } catch (e) {
-                console.error('Ошибка при декодировании бинарных данных:', e);
-                return [0, 1]; // Возвращаем простой массив в случае ошибки
-            }
-        }
-
-        // Обрабатываем массивы
-        if (Array.isArray(data)) {
-            return data.map(item => decodeBinaryData(item));
-        }
-
-        // Обрабатываем объекты
-        const result = {};
-        for (const key in data) {
-            result[key] = decodeBinaryData(data[key]);
-        }
-        return result;
-    }
-
-    return data;
-}
 
 
 // Функция для отображения визуализации из JSON
@@ -48,10 +12,10 @@ function renderVisualization(containerId, jsonData, config = {}) {
         return;
     }
 
-    // Отладочная информация
-    console.log(`Rendering visualization for ${containerId}:`, jsonData);
+    // Увеличим высоту контейнера
+    container.style.height = '600px';
 
-    // Пустой контейнер
+    // Очищаем контейнер
     container.innerHTML = '';
 
     // Преобразуем JSON строку в объект, если это необходимо
@@ -59,7 +23,6 @@ function renderVisualization(containerId, jsonData, config = {}) {
     if (typeof jsonData === 'string') {
         try {
             plotData = JSON.parse(jsonData);
-            console.log("Parsed JSON data:", plotData);
         } catch (e) {
             console.error('Error parsing JSON data:', e);
             container.innerHTML = '<div class="alert alert-danger">Ошибка при загрузке данных визуализации</div>';
@@ -67,60 +30,6 @@ function renderVisualization(containerId, jsonData, config = {}) {
         }
     } else {
         plotData = jsonData;
-    }
-
-    // Декодируем бинарные данные
-    if (plotData.data) {
-        console.log("Декодирование бинарных данных...");
-        plotData.data = decodeBinaryData(plotData.data);
-        console.log("Декодированные данные:", plotData.data);
-    }
-
-    // Исправление структуры данных, если она не соответствует ожидаемому формату Plotly
-    if (!plotData.data || !Array.isArray(plotData.data)) {
-        console.warn('Fixing visualization data structure for Plotly');
-
-        // Создаем правильную структуру данных
-        const fixedData = {
-            data: [],
-            layout: {}
-        };
-
-        // Пытаемся найти данные в нестандартной структуре
-        if (plotData.traces && Array.isArray(plotData.traces)) {
-            console.log('Found data in plotData.traces');
-            fixedData.data = plotData.traces;
-        } else if (plotData.frames && Array.isArray(plotData.frames)) {
-            console.log('Found data in plotData.frames');
-            // Извлекаем данные из первого фрейма или создаем пустой массив
-            fixedData.data = plotData.frames[0]?.data || [];
-        } else {
-            // Если нет данных, создаем пустую линию
-            console.log('No data found, creating empty line');
-            fixedData.data = [{
-                type: 'scatter',
-                x: [0, 1],
-                y: [0, 0],
-                mode: 'lines',
-                name: 'Нет данных'
-            }];
-        }
-
-        // Если есть макет, используем его
-        if (plotData.layout && typeof plotData.layout === 'object') {
-            fixedData.layout = plotData.layout;
-        } else {
-            // Создаем базовый макет
-            fixedData.layout = {
-                title: 'Визуализация',
-                xaxis: { title: 'X' },
-                yaxis: { title: 'Y' }
-            };
-        }
-
-        // Заменяем данные исправленной структурой
-        plotData = fixedData;
-        console.log('Fixed plotData:', plotData);
     }
 
     // Настройки по умолчанию
@@ -137,10 +46,6 @@ function renderVisualization(containerId, jsonData, config = {}) {
     // Создаем график
     try {
         Plotly.newPlot(container, plotData.data, plotData.layout, plotConfig);
-        console.log(`Successfully rendered visualization for ${containerId}`);
-
-        console.log(`Plotly.newPlot для ${containerId} с данными:`, plotData.data);
-console.log(`Макет для ${containerId}:`, plotData.layout);
     } catch (error) {
         console.error(`Error rendering Plotly chart for ${containerId}:`, error);
         container.innerHTML = '<div class="alert alert-danger">Ошибка при создании графика: ' + error.message + '</div>';
@@ -346,6 +251,7 @@ function createVisualizationDashboard(containerId, projectId, visualizations) {
 }
 
 // Функция для создания сводной таблицы результатов
+// Функция для создания сводной таблицы результатов
 function createResultsSummaryTable(containerId, results) {
     const container = document.getElementById(containerId);
     if (!container) {
@@ -377,8 +283,21 @@ function createResultsSummaryTable(containerId, results) {
     const breakthroughWithCap = results.breakthrough_time.with_cap;
     const breakthroughWithoutCap = results.breakthrough_time.without_cap;
 
+    // Получаем параметры фронта, если они есть
+    let velocityWithCap = 0;
+    let velocityWithoutCap = 0;
+    let transitionWidthWithCap = 0;
+    let transitionWidthWithoutCap = 0;
+
+    if (results.front_parameters) {
+        velocityWithCap = results.front_parameters.velocity.with_cap || 0;
+        velocityWithoutCap = results.front_parameters.velocity.without_cap || 0;
+        transitionWidthWithCap = results.front_parameters.transition_width.with_cap || 0;
+        transitionWidthWithoutCap = results.front_parameters.transition_width.without_cap || 0;
+    }
+
     // Создаем таблицу
-    container.innerHTML = `
+    let tableHTML = `
         <div class="table-responsive">
             <table class="table table-bordered table-hover">
                 <thead class="table-light">
@@ -407,11 +326,37 @@ function createResultsSummaryTable(containerId, results) {
                             ${formatNumber(recoveryWithCap - recoveryWithoutCap, 3)}
                             (${formatNumber((recoveryWithCap - recoveryWithoutCap) / recoveryWithoutCap * 100, 1)}%)
                         </td>
+                    </tr>`;
+
+    // Добавляем параметры фронта, если они доступны
+    if (results.front_parameters) {
+        tableHTML += `
+                    <tr>
+                        <td>Скорость движения фронта, м/день</td>
+                        <td>${formatNumber(velocityWithoutCap, 2)}</td>
+                        <td>${formatNumber(velocityWithCap, 2)}</td>
+                        <td>
+                            ${formatNumber(velocityWithCap - velocityWithoutCap, 2)}
+                            (${formatNumber((velocityWithCap - velocityWithoutCap) / velocityWithoutCap * 100, 1)}%)
+                        </td>
                     </tr>
+                    <tr>
+                        <td>Ширина переходной зоны, м</td>
+                        <td>${formatNumber(transitionWidthWithoutCap, 1)}</td>
+                        <td>${formatNumber(transitionWidthWithCap, 1)}</td>
+                        <td>
+                            ${formatNumber(transitionWidthWithCap - transitionWidthWithoutCap, 1)}
+                            (${formatNumber((transitionWidthWithCap - transitionWidthWithoutCap) / transitionWidthWithoutCap * 100, 1)}%)
+                        </td>
+                    </tr>`;
+    }
+
+    tableHTML += `
                 </tbody>
             </table>
-        </div>
-    `;
+        </div>`;
+
+    container.innerHTML = tableHTML;
 }
 
 // Функция для создания сводки параметров модели

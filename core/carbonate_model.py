@@ -78,12 +78,31 @@ class CarbonateModel(OilFiltrationModel):
         matrix_volume = self.matrix_porosity / self.porosity
         fracture_volume = self.fracture_porosity / self.porosity
 
-        self.Sw_with_cap = matrix_volume * self.Sw_matrix + fracture_volume * self.Sw_fracture
+        # ВАЖНОЕ ИЗМЕНЕНИЕ: Сначала запускаем базовую модель
+        # Сохраняем текущие начальные условия
+        Sw_with_cap_initial = np.copy(self.Sw_with_cap)
+        Sw_without_cap_initial = np.copy(self.Sw_without_cap)
 
         # Запускаем обычное моделирование для сравнения (без капиллярных эффектов)
         super().run_simulation()
 
+        # Сохраняем результаты моделирования без учета капиллярных эффектов
+        Sw_without_cap_results = np.copy(self.Sw_without_cap)
+
+        # Восстанавливаем начальные условия
+        self.Sw_with_cap = Sw_with_cap_initial
+        self.Sw_without_cap = Sw_without_cap_initial
+
+        # ТЕПЕРЬ заполняем массив Sw_with_cap результатами карбонатного моделирования
+        for n in range(self.nt):
+            for i in range(self.nx + 1):
+                self.Sw_with_cap[n, i] = matrix_volume * self.Sw_matrix[n, i] + fracture_volume * self.Sw_fracture[n, i]
+
+        # Восстанавливаем результаты моделирования без учета капиллярных эффектов
+        self.Sw_without_cap = Sw_without_cap_results
+
         print("Моделирование карбонатного коллектора завершено.")
+
 
     def transfer_term(self, n, i):
         """Расчет обмена флюидами между трещинами и матрицей"""
@@ -117,6 +136,7 @@ class CarbonateModel(OilFiltrationModel):
 
         return mobility * pc_grad
 
+    # В carbonate_model.py метод calculate_recovery_factor()
     def calculate_recovery_factor(self):
         """Расчет коэффициента нефтеотдачи с учетом двойной пористости"""
         initial_oil = 1 - self.initial_water_saturation
@@ -132,6 +152,9 @@ class CarbonateModel(OilFiltrationModel):
             # Средняя нефтенасыщенность для двойной пористости
             avg_oil_matrix = 1 - np.mean(self.Sw_matrix[n, :])
             avg_oil_fracture = 1 - np.mean(self.Sw_fracture[n, :])
+
+            # Этот расчет должен соответствовать расчету в методе get_saturation_profile
+            # для корректного отображения данных
             avg_oil_with_cap = matrix_volume * avg_oil_matrix + fracture_volume * avg_oil_fracture
 
             # Средняя нефтенасыщенность без учета капиллярных эффектов
@@ -173,3 +196,4 @@ class CarbonateModel(OilFiltrationModel):
         results['matrix_fracture_profiles'] = matrix_fracture_profiles
 
         return results
+

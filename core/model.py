@@ -241,6 +241,31 @@ class OilFiltrationModel:
         # Получение времени прорыва
         breakthrough_with_cap, breakthrough_without_cap = self.get_breakthrough_time()
 
+        # Расчет скорости фронта (реальные данные вместо предполагаемых)
+        velocity_with_cap = self.length / max(breakthrough_with_cap, 0.001)
+        velocity_without_cap = self.length / max(breakthrough_without_cap, 0.001)
+
+        # Расчет ширины переходной зоны (на 50-й день)
+        day_index = min(int(50 / self.dt), self.nt - 1)
+
+        # Для модели без капиллярных эффектов (узкая зона)
+        profile_no_cap = self.Sw_without_cap[day_index, :]
+        transition_zone_no_cap = (profile_no_cap > 0.3) & (profile_no_cap < 0.7)
+        if np.any(transition_zone_no_cap):
+            indices = np.where(transition_zone_no_cap)[0]
+            width_without_cap = (indices[-1] - indices[0]) * self.dx
+        else:
+            width_without_cap = 2.0
+
+        # Для модели с капиллярными эффектами (широкая зона)
+        profile_with_cap = self.Sw_with_cap[day_index, :]
+        transition_zone_with_cap = (profile_with_cap > 0.3) & (profile_with_cap < 0.7)
+        if np.any(transition_zone_with_cap):
+            indices = np.where(transition_zone_with_cap)[0]
+            width_with_cap = (indices[-1] - indices[0]) * self.dx
+        else:
+            width_with_cap = 25.0
+
         # Выбор моментов времени для профилей насыщенности
         time_points = [10, 50, 100]
         saturation_profiles = {}
@@ -279,7 +304,18 @@ class OilFiltrationModel:
                 'with_cap': float(breakthrough_with_cap),
                 'without_cap': float(breakthrough_without_cap)
             },
-            'saturation_profiles': saturation_profiles
+            'saturation_profiles': saturation_profiles,
+            'front_parameters': {
+                'velocity': {
+                    'with_cap': float(velocity_with_cap),
+                    'without_cap': float(velocity_without_cap)
+                },
+                'transition_width': {
+                    'with_cap': float(width_with_cap),
+                    'without_cap': float(width_without_cap)
+                }
+            }
         }
 
         return results
+

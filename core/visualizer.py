@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import os
+import traceback
+
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
@@ -37,11 +39,14 @@ class Visualizer:
 
             time_index = int(day / self.model.dt)
 
+            # Получаем данные из модели через метод get_saturation_profile
+            with_cap_data, without_cap_data = self.get_saturation_profile(time_index)
+
             # График насыщенности без учета капиллярных эффектов
             fig.add_trace(
                 go.Scatter(
                     x=self.model.x,
-                    y=self.model.Sw_without_cap[time_index, :],
+                    y=without_cap_data,  # Используем полученные данные
                     mode='lines',
                     name=f'День {day} (без кап. эффектов)',
                     line=dict(color=colors[i % len(colors)])
@@ -53,7 +58,7 @@ class Visualizer:
             fig.add_trace(
                 go.Scatter(
                     x=self.model.x,
-                    y=self.model.Sw_with_cap[time_index, :],
+                    y=with_cap_data,  # Используем полученные данные
                     mode='lines',
                     name=f'День {day} (с кап. эффектами)',
                     line=dict(color=colors[i % len(colors)])
@@ -74,6 +79,25 @@ class Visualizer:
 
         return fig
 
+    def get_saturation_profile(self, time_index):
+        """Получение профилей насыщенности для заданного момента времени"""
+        # Если используется карбонатная модель
+        if hasattr(self.model, 'Sw_matrix') and hasattr(self.model, 'Sw_fracture'):
+            # Рассчитываем насыщенность с учетом капиллярных эффектов
+            matrix_volume = self.model.matrix_porosity / self.model.porosity
+            fracture_volume = self.model.fracture_porosity / self.model.porosity
+            with_cap_data = matrix_volume * self.model.Sw_matrix[time_index,
+                                            :] + fracture_volume * self.model.Sw_fracture[time_index, :]
+
+            # Для данных без учета капиллярных эффектов используем имеющийся массив
+            without_cap_data = self.model.Sw_without_cap[time_index, :]
+        else:
+            # Для обычной модели используем имеющиеся массивы
+            with_cap_data = self.model.Sw_with_cap[time_index, :]
+            without_cap_data = self.model.Sw_without_cap[time_index, :]
+
+        return with_cap_data, without_cap_data
+
     def create_saturation_difference_figure(self, days=[10, 50, 100]):
         """Создание графика разницы насыщенностей"""
         # Создаем фигуру
@@ -87,8 +111,11 @@ class Visualizer:
 
             time_index = int(day / self.model.dt)
 
+            # Получаем данные из модели через метод get_saturation_profile
+            with_cap_data, without_cap_data = self.get_saturation_profile(time_index)
+
             # Вычисляем разницу насыщенностей
-            diff = self.model.Sw_with_cap[time_index, :] - self.model.Sw_without_cap[time_index, :]
+            diff = with_cap_data - without_cap_data
 
             # Добавляем график разницы
             fig.add_trace(
@@ -111,6 +138,74 @@ class Visualizer:
             title_text='Разница водонасыщенности (с учетом - без учета капиллярных эффектов)',
             height=500,
             legend_title='Время',
+            hovermode='closest'
+        )
+
+        return fig
+
+    def create_saturation_evolution_figure(self):
+        """Создание контурного графика эволюции насыщенности"""
+        # Создаем массивы для хранения данных с учетом капиллярных эффектов и без
+        with_cap_data = np.zeros((self.model.nt, self.model.nx + 1))
+        without_cap_data = np.zeros((self.model.nt, self.model.nx + 1))
+
+        # Заполняем массивы данными из модели
+        for n in range(self.model.nt):
+            with_cap_data[n, :], without_cap_data[n, :] = self.get_saturation_profile(n)
+
+        # Создаем сетку времени и пространства
+        X, T = np.meshgrid(self.model.x, self.model.t)
+
+        # Создаем фигуру с подграфиками
+        fig = make_subplots(
+            rows=1, cols=2,
+            subplot_titles=(
+                'Эволюция насыщенности без учета капиллярных эффектов',
+                'Эволюция насыщенности с учетом капиллярных эффектов'
+            )
+        )
+
+        # Добавляем контурные графики
+        fig.add_trace(
+            go.Contour(
+                z=without_cap_data,  # Используем наш массив вместо self.model.Sw_without_cap
+                x=self.model.x,
+                y=self.model.t,
+                colorscale='Viridis',
+                colorbar=dict(title='Водонасыщенность, д.ед.', x=-0.07),
+                contours=dict(
+                    start=0,
+                    end=1,
+                    size=0.05
+                )
+            ),
+            row=1, col=1
+        )
+
+        fig.add_trace(
+            go.Contour(
+                z=with_cap_data,  # Используем наш массив вместо self.model.Sw_with_cap
+                x=self.model.x,
+                y=self.model.t,
+                colorscale='Viridis',
+                colorbar=dict(title='Водонасыщенность, д.ед.', x=1.07),
+                contours=dict(
+                    start=0,
+                    end=1,
+                    size=0.05
+                )
+            ),
+            row=1, col=2
+        )
+
+        # Настройка осей и заголовка
+        fig.update_xaxes(title_text='Расстояние, м', row=1, col=1)
+        fig.update_xaxes(title_text='Расстояние, м', row=1, col=2)
+        fig.update_yaxes(title_text='Время, дни', row=1, col=1)
+        fig.update_yaxes(title_text='Время, дни', row=1, col=2)
+        fig.update_layout(
+            title_text='Эволюция насыщенности во времени и пространстве',
+            height=600,
             hovermode='closest'
         )
 
@@ -251,8 +346,8 @@ class Visualizer:
 
     def create_capillary_pressure_curve(self):
         """Создание графика кривой капиллярного давления"""
-        # Создаем массив насыщенностей
-        sw_values = np.linspace(0.0, 1.0, 100)
+        # Создаем массив насыщенностей (больше точек для плавной кривой)
+        sw_values = np.linspace(0.0, 1.0, 150)
         pc_values = np.zeros_like(sw_values)
 
         # Вычисляем капиллярное давление для каждой насыщенности
@@ -265,31 +360,44 @@ class Visualizer:
         # Добавляем график
         fig.add_trace(
             go.Scatter(
-                x=sw_values,
-                y=pc_values,
+                x=sw_values.tolist(),
+                y=pc_values.tolist(),
                 mode='lines',
-                line=dict(color='blue'),
+                line=dict(color='blue', width=3),
                 name='Капиллярное давление'
             )
         )
 
         # Добавляем нулевую линию
-        fig.add_hline(y=0, line_dash='dash', line_color='black', line_width=1)
+        fig.add_shape(
+            type="line",
+            x0=0, y0=0, x1=1, y1=0,
+            line=dict(color="black", width=1, dash="dash"),
+        )
 
         # Настройка осей и заголовка
-        fig.update_xaxes(title_text='Водонасыщенность, д.ед.')
-        fig.update_yaxes(title_text='Капиллярное давление, МПа')
         fig.update_layout(
-            title_text='Кривая капиллярного давления',
-            height=500,
-            hovermode='closest'
+            title='Кривая капиллярного давления',
+            title_font_size=20,
+            xaxis_title='Водонасыщенность, д.ед.',
+            yaxis_title='Капиллярное давление, МПа',
+            xaxis_range=[0, 1],
+            plot_bgcolor='#f8f9fa',
+            width=800,
+            height=600,
+            legend=dict(
+                x=0.02,
+                y=0.98,
+                bgcolor='rgba(255, 255, 255, 0.8)',
+                bordercolor='#cccccc'
+            )
         )
 
         return fig
 
     def create_relative_permeability_curves(self):
         """Создание графика кривых относительной проницаемости"""
-        # Создаем массив насыщенностей
+        # Создаем массив насыщенностей (100 РАВНОМЕРНЫХ точек)
         sw_values = np.linspace(0.0, 1.0, 100)
         krw_values = np.zeros_like(sw_values)
         kro_values = np.zeros_like(sw_values)
@@ -302,34 +410,44 @@ class Visualizer:
         # Создаем фигуру
         fig = go.Figure()
 
-        # Добавляем графики
+        # Добавляем графики напрямую как массивы (без любых сложных преобразований)
         fig.add_trace(
             go.Scatter(
-                x=sw_values,
-                y=krw_values,
+                x=sw_values.tolist(),  # Явно преобразуем в список Python
+                y=krw_values.tolist(),  # Явно преобразуем в список Python
                 mode='lines',
-                line=dict(color='blue'),
+                line=dict(color='blue', width=3),
                 name='Krw (вода)'
             )
         )
 
         fig.add_trace(
             go.Scatter(
-                x=sw_values,
-                y=kro_values,
+                x=sw_values.tolist(),  # Явно преобразуем в список Python
+                y=kro_values.tolist(),  # Явно преобразуем в список Python
                 mode='lines',
-                line=dict(color='green'),
+                line=dict(color='green', width=3),
                 name='Kro (нефть)'
             )
         )
 
         # Настройка осей и заголовка
-        fig.update_xaxes(title_text='Водонасыщенность, д.ед.')
-        fig.update_yaxes(title_text='Относительная проницаемость, д.ед.')
         fig.update_layout(
-            title_text='Кривые относительной проницаемости',
-            height=500,
-            hovermode='closest'
+            title='Кривые относительной проницаемости',
+            title_font_size=20,
+            xaxis_title='Водонасыщенность, д.ед.',
+            yaxis_title='Относительная проницаемость, д.ед.',
+            xaxis_range=[0, 1],  # Устанавливаем диапазон значений по X от 0 до 1
+            yaxis_range=[0, 1],  # Устанавливаем диапазон значений по Y от 0 до 1
+            plot_bgcolor='#f8f9fa',
+            width=800,
+            height=600,
+            legend=dict(
+                x=0.02,
+                y=0.98,
+                bgcolor='rgba(255, 255, 255, 0.8)',
+                bordercolor='#cccccc'
+            )
         )
 
         return fig
@@ -379,71 +497,68 @@ class Visualizer:
         visualizations = {}
         try:
             # Профили насыщенности
-            viz_json = self.create_saturation_profiles_figure(days).to_json()
-            checked = self.check_visualization_data('saturation_profiles', viz_json)
-            if checked is True:
-                visualizations['saturation_profiles'] = viz_json
-            elif checked:  # Если вернулась исправленная версия
-                visualizations['saturation_profiles'] = json.dumps(checked)
+            fig = self.create_saturation_profiles_figure(days)
+            visualizations['saturation_profiles'] = fig.to_json()
 
             # Разница насыщенностей
-            viz_json = self.create_saturation_difference_figure(days).to_json()
-            checked = self.check_visualization_data('saturation_difference', viz_json)
-            if checked is True:
-                visualizations['saturation_difference'] = viz_json
-            elif checked:
-                visualizations['saturation_difference'] = json.dumps(checked)
+            fig = self.create_saturation_difference_figure(days)
+            visualizations['saturation_difference'] = fig.to_json()
 
             # Фактор восстановления
-            viz_json = self.create_recovery_factor_figure().to_json()
-            checked = self.check_visualization_data('recovery_factor', viz_json)
-            if checked is True:
-                visualizations['recovery_factor'] = viz_json
-            elif checked:
-                visualizations['recovery_factor'] = json.dumps(checked)
+            fig = self.create_recovery_factor_figure()
+            visualizations['recovery_factor'] = fig.to_json()
 
             # Время прорыва
-            viz_json = self.create_breakthrough_time_figure().to_json()
-            checked = self.check_visualization_data('breakthrough_time', viz_json)
-            if checked is True:
-                visualizations['breakthrough_time'] = viz_json
-            elif checked:
-                visualizations['breakthrough_time'] = json.dumps(checked)
+            fig = self.create_breakthrough_time_figure()
+            visualizations['breakthrough_time'] = fig.to_json()
 
             # Эволюция насыщенности
-            viz_json = self.create_saturation_evolution_figure().to_json()
-            checked = self.check_visualization_data('saturation_evolution', viz_json)
-            if checked is True:
-                visualizations['saturation_evolution'] = viz_json
-            elif checked:
-                visualizations['saturation_evolution'] = json.dumps(checked)
+            fig = self.create_saturation_evolution_figure()
+            visualizations['saturation_evolution'] = fig.to_json()
 
             # Капиллярное давление
-            viz_json = self.create_capillary_pressure_curve().to_json()
-            checked = self.check_visualization_data('capillary_pressure', viz_json)
-            if checked is True:
-                visualizations['capillary_pressure'] = viz_json
-            elif checked:
-                visualizations['capillary_pressure'] = json.dumps(checked)
+            fig = self.create_capillary_pressure_curve()
+            visualizations['capillary_pressure'] = fig.to_json()
 
             # Относительная проницаемость
-            viz_json = self.create_relative_permeability_curves().to_json()
-            checked = self.check_visualization_data('relative_permeability', viz_json)
-            if checked is True:
-                visualizations['relative_permeability'] = viz_json
-            elif checked:
-                visualizations['relative_permeability'] = json.dumps(checked)
+            fig = self.create_relative_permeability_curves()
+            visualizations['relative_permeability'] = fig.to_json()
 
             # Fractional flow
-            viz_json = self.create_fractional_flow_curve().to_json()
-            checked = self.check_visualization_data('fractional_flow', viz_json)
-            if checked is True:
-                visualizations['fractional_flow'] = viz_json
-            elif checked:
-                visualizations['fractional_flow'] = json.dumps(checked)
+            fig = self.create_fractional_flow_curve()
+            visualizations['fractional_flow'] = fig.to_json()
+
+            # Добавление оригинальных данных для каждой визуализации
+            for key, json_data in visualizations.items():
+                try:
+                    # Преобразуем JSON в словарь
+                    data = json.loads(json_data)
+
+                    # Если data содержит бинарные данные, добавляем оригинальные данные
+                    if 'data' in data:
+                        for trace in data['data']:
+                            if 'x' in trace and isinstance(trace['x'], dict) and 'bdata' in trace['x']:
+                                # Сохраняем оригинальные данные x
+                                if isinstance(trace['x'].get('original'), list):
+                                    pass  # Уже есть оригинальные данные
+                                elif 'original' not in trace['x'] and 'data' in trace['x']:
+                                    trace['x']['original'] = trace['x']['data']
+
+                            if 'y' in trace and isinstance(trace['y'], dict) and 'bdata' in trace['y']:
+                                # Сохраняем оригинальные данные y
+                                if isinstance(trace['y'].get('original'), list):
+                                    pass  # Уже есть оригинальные данные
+                                elif 'original' not in trace['y'] and 'data' in trace['y']:
+                                    trace['y']['original'] = trace['y']['data']
+
+                    # Сохраняем обновленный JSON
+                    visualizations[key] = json.dumps(data)
+                except Exception as e:
+                    print(f"Ошибка при обработке JSON для {key}: {e}")
 
         except Exception as e:
             print(f"ОШИБКА при создании визуализаций: {str(e)}")
+            traceback.print_exc()
 
         print(f"Создано {len(visualizations)} визуализаций")
         return visualizations
@@ -453,32 +568,51 @@ class Visualizer:
         project_dir = os.path.join(self.output_dir, str(project_id))
         os.makedirs(project_dir, exist_ok=True)
 
-        visualizations = self.create_visualizations()
+        visualizations = {}
 
-        print(f"Сохранение визуализаций в директорию: {project_dir}")
-        for name, json_data in visualizations.items():
+        # ВАЖНОЕ ИЗМЕНЕНИЕ: используем простую сериализацию данных
+        print(f"Создание визуализаций для проекта {project_id}...")
+
+        # Создаем визуализации
+        figs = {
+            'saturation_profiles': self.create_saturation_profiles_figure([10, 50, 100]),
+            'saturation_difference': self.create_saturation_difference_figure([10, 50, 100]),
+            'recovery_factor': self.create_recovery_factor_figure(),
+            'breakthrough_time': self.create_breakthrough_time_figure(),
+            'saturation_evolution': self.create_saturation_evolution_figure(),
+            'capillary_pressure': self.create_capillary_pressure_curve(),
+            'fractional_flow': self.create_fractional_flow_curve(),
+            'relative_permeability': self.create_relative_permeability_curves()
+        }
+
+        for name, fig in figs.items():
             file_path = os.path.join(project_dir, f'{name}.json')
 
-            # Проверяем структуру JSON перед сохранением
             try:
-                data = json.loads(json_data)
-                # Убедимся, что структура соответствует требованиям Plotly
-                if 'data' not in data or 'layout' not in data:
-                    # Создаем правильную структуру
-                    corrected_data = {
-                        "data": data.get('data', []) if isinstance(data.get('data', []), list) else [],
-                        "layout": data.get('layout', {}) if isinstance(data.get('layout', {}), dict) else {}
-                    }
-                    json_data = json.dumps(corrected_data)
-            except Exception as e:
-                print(f"ОШИБКА при анализе JSON для {name}: {str(e)}")
+                # Используем стандартную сериализацию без сложных структур
+                json_data = fig.to_json()
 
-            try:
+                # Проверяем валидность JSON перед сохранением
+                data = json.loads(json_data)
+
+                # Удаляем любые бинарные данные, если они есть
+                if 'data' in data:
+                    for trace in data['data']:
+                        for key in ['x', 'y', 'z']:
+                            if key in trace and isinstance(trace[key], dict) and 'bdata' in trace[key]:
+                                # Заменяем бинарные данные обычными массивами
+                                if 'data' in trace[key] and isinstance(trace[key]['data'], list):
+                                    trace[key] = trace[key]['data']
+
+                # Сохраняем чистый JSON
                 with open(file_path, 'w', encoding='utf-8') as f:
-                    f.write(json_data)
-                print(f"Сохранен файл: {file_path}")
+                    json.dump(data, f)
+
+                visualizations[name] = json_data
+                print(f"Успешно сохранена визуализация: {name}")
+
             except Exception as e:
-                print(f"ОШИБКА при сохранении файла {file_path}: {str(e)}")
+                print(f"ОШИБКА при сохранении визуализации {name}: {str(e)}")
 
         return visualizations
 
