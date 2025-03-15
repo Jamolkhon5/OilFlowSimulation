@@ -86,6 +86,20 @@ class Config:
     }
 
 
+class ProductionConfig(Config):
+    DEBUG = False
+    SECRET_KEY = os.environ.get('SECRET_KEY') or 'gazprom-neft-super-secret-key'
+
+    # Изменяем пути для сохранения файлов на абсолютные
+    BASE_DIR = os.path.expanduser('~/neftemodel.ру/data')
+    UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
+    RESULTS_FOLDER = os.path.join(BASE_DIR, 'results')
+    TEMP_FOLDER = os.path.join(BASE_DIR, 'temp')
+    IMAGES_FOLDER = os.path.join(BASE_DIR, 'images')
+
+    # База данных
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(BASE_DIR, 'oil_filtration.db')
+
 class DevelopmentConfig(Config):
     DEBUG = True
 

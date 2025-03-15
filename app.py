@@ -68,8 +68,11 @@ def create_upload_directories(app):
     os.makedirs(app.config['IMAGES_FOLDER'], exist_ok=True)
 
 
-# Создание экземпляра приложения
-app = create_app()
+# Для продакшена
+if os.environ.get('FLASK_ENV') == 'production':
+    app = create_app(ProductionConfig)
+else:
+    app = create_app()
 
 # Точка входа для запуска приложения
 if __name__ == '__main__':
