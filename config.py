@@ -104,8 +104,3 @@ class DevelopmentConfig(Config):
     DEBUG = True
 
 
-class ProductionConfig(Config):
-    DEBUG = False
-    # В продакшене настройки могут отличаться
-    # SECRET_KEY должен быть обязательно изменен
-    # SQLALCHEMY_DATABASE_URI должен указывать на продакшен-БД
