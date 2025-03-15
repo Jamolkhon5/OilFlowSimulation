@@ -91,7 +91,7 @@ class ProductionConfig(Config):
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'gazprom-neft-super-secret-key'
 
     # Изменяем пути для сохранения файлов на абсолютные
-    BASE_DIR = os.path.expanduser('~/neftemodel.ру/data')
+    BASE_DIR = os.path.expanduser('~/neftemodel.ru/data')
     UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
     RESULTS_FOLDER = os.path.join(BASE_DIR, 'results')
     TEMP_FOLDER = os.path.join(BASE_DIR, 'temp')

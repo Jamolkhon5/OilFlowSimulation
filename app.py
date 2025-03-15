@@ -3,9 +3,9 @@
 
 from flask import Flask, render_template
 import os
-from config import Config
 from extensions import db, migrate, login_manager, csrf
 from datetime import datetime
+from config import Config, ProductionConfig
 
 def create_app(config_class=Config):
     """Функция-фабрика для создания экземпляра Flask-приложения"""
