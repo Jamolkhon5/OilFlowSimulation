@@ -55,6 +55,11 @@
             <i class="fas fa-chart-bar"></i> Результаты
         </button>
     </li>
+     <li class="nav-item" role="presentation">
+        <button class="nav-link" id="images-tab" data-bs-toggle="tab" data-bs-target="#images" type="button" role="tab" aria-controls="images" aria-selected="false">
+            <i class="fas fa-images"></i> Изображения
+        </button>
+    </li>
     {% endif %}
 </ul>
 
@@ -346,12 +351,38 @@
         </div>
     </div>
     {% endif %}
+    {% if results %}
+    <div class="tab-pane fade" id="images" role="tabpanel" aria-labelledby="images-tab">
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <h3>Сохраненные изображения</h3>
+                <p>Просмотр и скачивание изображений визуализаций в различных форматах.</p>
+            </div>
+            <div class="col-md-4 text-md-end">
+                <div class="btn-group" role="group" aria-label="Формат изображений">
+                    <button type="button" class="btn btn-outline-primary active" id="btn-format-png">PNG</button>
+                    <button type="button" class="btn btn-outline-primary" id="btn-format-svg">SVG</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Контейнер для изображений -->
+        <div id="images-container">
+            <div class="d-flex justify-content-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Загрузка изображений...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
 
 {% block extra_js %}
 {% if results %}
 <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script src="{{ url_for('static', filename='js/images.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Инициализация всплывающих подсказок
@@ -365,6 +396,37 @@ document.addEventListener('DOMContentLoaded', function() {
         const resultsTab = document.getElementById('results-tab');
         if (resultsTab) {
             new bootstrap.Tab(resultsTab).show();
+        }
+    } else if (window.location.hash === '#images') {
+        const imagesTab = document.getElementById('images-tab');
+        if (imagesTab) {
+            new bootstrap.Tab(imagesTab).show();
+        }
+    }
+
+    // Инициализация визуализаций и создание таблицы результатов
+    const visualizationContainer = document.getElementById('visualization-container');
+    if (visualizationContainer) {
+        const projectId = visualizationContainer.dataset.projectId;
+        const resultsDataStr = visualizationContainer.dataset.results;
+
+        if (projectId && resultsDataStr) {
+            try {
+                const results = JSON.parse(resultsDataStr);
+
+                // Создаем сводную таблицу результатов
+                const summaryContainer = document.getElementById('results-summary');
+                if (summaryContainer) {
+                    createResultsSummaryTable('results-summary', results);
+                }
+
+                // Создаем визуализации
+                if (results.visualizations) {
+                    createVisualizationDashboard('visualization-container', projectId, results.visualizations);
+                }
+            } catch (e) {
+                console.error('Error parsing results data:', e);
+            }
         }
     }
 });

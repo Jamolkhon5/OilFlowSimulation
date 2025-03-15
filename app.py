@@ -64,6 +64,8 @@ def create_upload_directories(app):
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     os.makedirs(app.config['RESULTS_FOLDER'], exist_ok=True)
     os.makedirs(app.config['TEMP_FOLDER'], exist_ok=True)
+    # Создаем директорию для изображений
+    os.makedirs(app.config['IMAGES_FOLDER'], exist_ok=True)
 
 
 # Создание экземпляра приложения

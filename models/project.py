@@ -101,7 +101,42 @@ class ProjectResult(db.Model):
     def get_results(self):
         """Возвращает результаты моделирования в виде словаря"""
         if self.result_data:
-            return json.loads(self.result_data)
+            try:
+                result_data = json.loads(self.result_data)
+
+                # Проверяем наличие ключа visualizations и корректируем если нужно
+                if 'visualizations' not in result_data or not result_data['visualizations']:
+                    # Добавляем все возможные визуализации
+                    result_data['visualizations'] = {
+                        'saturation_profiles': True,
+                        'saturation_difference': True,
+                        'recovery_factor': True,
+                        'breakthrough_time': True,
+                        'saturation_evolution': True,
+                        'capillary_pressure': True,
+                        'fractional_flow': True,
+                        'relative_permeability': True
+                    }
+
+                # Убеждаемся, что у нас есть параметры модели
+                if 'parameters' not in result_data or not result_data['parameters']:
+                    # Получаем параметры из проекта
+                    project = Project.query.get(self.project_id)
+                    if project and project.data and project.data.model_parameters:
+                        try:
+                            result_data['parameters'] = json.loads(project.data.model_parameters)
+                        except:
+                            pass
+
+                return result_data
+            except Exception as e:
+                print(f"Ошибка при обработке JSON результатов: {e}")
+
+                # Возвращаем простую структуру, чтобы избежать ошибок
+                return {
+                    'error': str(e),
+                    'visualizations': {}
+                }
         return {}
 
     def __repr__(self):

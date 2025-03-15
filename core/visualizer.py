@@ -14,10 +14,13 @@ import json
 class Visualizer:
     """Класс для визуализации результатов моделирования"""
 
-    def __init__(self, model, output_dir=None):
+    def __init__(self, model, output_dir=None, image_output_dir=None):
         self.model = model
         self.output_dir = output_dir or 'data/results'
+        # Новый параметр для директории сохранения изображений
+        self.image_output_dir = image_output_dir or 'data/images'
         os.makedirs(self.output_dir, exist_ok=True)
+        os.makedirs(self.image_output_dir, exist_ok=True)
 
     def create_saturation_profiles_figure(self, days=[10, 50, 100]):
         """Создание графика профилей насыщенности"""
@@ -143,73 +146,6 @@ class Visualizer:
 
         return fig
 
-    def create_saturation_evolution_figure(self):
-        """Создание контурного графика эволюции насыщенности"""
-        # Создаем массивы для хранения данных с учетом капиллярных эффектов и без
-        with_cap_data = np.zeros((self.model.nt, self.model.nx + 1))
-        without_cap_data = np.zeros((self.model.nt, self.model.nx + 1))
-
-        # Заполняем массивы данными из модели
-        for n in range(self.model.nt):
-            with_cap_data[n, :], without_cap_data[n, :] = self.get_saturation_profile(n)
-
-        # Создаем сетку времени и пространства
-        X, T = np.meshgrid(self.model.x, self.model.t)
-
-        # Создаем фигуру с подграфиками
-        fig = make_subplots(
-            rows=1, cols=2,
-            subplot_titles=(
-                'Эволюция насыщенности без учета капиллярных эффектов',
-                'Эволюция насыщенности с учетом капиллярных эффектов'
-            )
-        )
-
-        # Добавляем контурные графики
-        fig.add_trace(
-            go.Contour(
-                z=without_cap_data,  # Используем наш массив вместо self.model.Sw_without_cap
-                x=self.model.x,
-                y=self.model.t,
-                colorscale='Viridis',
-                colorbar=dict(title='Водонасыщенность, д.ед.', x=-0.07),
-                contours=dict(
-                    start=0,
-                    end=1,
-                    size=0.05
-                )
-            ),
-            row=1, col=1
-        )
-
-        fig.add_trace(
-            go.Contour(
-                z=with_cap_data,  # Используем наш массив вместо self.model.Sw_with_cap
-                x=self.model.x,
-                y=self.model.t,
-                colorscale='Viridis',
-                colorbar=dict(title='Водонасыщенность, д.ед.', x=1.07),
-                contours=dict(
-                    start=0,
-                    end=1,
-                    size=0.05
-                )
-            ),
-            row=1, col=2
-        )
-
-        # Настройка осей и заголовка
-        fig.update_xaxes(title_text='Расстояние, м', row=1, col=1)
-        fig.update_xaxes(title_text='Расстояние, м', row=1, col=2)
-        fig.update_yaxes(title_text='Время, дни', row=1, col=1)
-        fig.update_yaxes(title_text='Время, дни', row=1, col=2)
-        fig.update_layout(
-            title_text='Эволюция насыщенности во времени и пространстве',
-            height=600,
-            hovermode='closest'
-        )
-
-        return fig
 
     def create_recovery_factor_figure(self):
         """Создание графика коэффициента нефтеотдачи"""
@@ -616,6 +552,51 @@ class Visualizer:
 
         return visualizations
 
+    def convert_to_plotly_format(fig, title=None):
+        """Конвертирует график Matplotlib в формат Plotly JSON"""
+        # Получаем данные из графика
+        data = []
+
+        for line in fig.axes[0].lines:
+            trace = {
+                'type': 'scatter',
+                'mode': 'lines',
+                'x': line.get_xdata().tolist(),
+                'y': line.get_ydata().tolist(),
+                'name': line.get_label() or None,
+                'line': {
+                    'width': line.get_linewidth(),
+                    'color': line.get_color()
+                }
+            }
+            data.append(trace)
+
+        # Создаем layout
+        layout = {
+            'title': title or fig.axes[0].get_title(),
+            'xaxis': {
+                'title': fig.axes[0].get_xlabel(),
+                'autorange': True
+            },
+            'yaxis': {
+                'title': fig.axes[0].get_ylabel(),
+                'autorange': True
+            },
+            'autosize': True,
+            'showlegend': True,
+            'font': {
+                'family': 'Roboto, sans-serif',
+                'size': 14
+            },
+            'plot_bgcolor': '#f8f8f8',
+            'paper_bgcolor': '#ffffff'
+        }
+
+        # Объединяем все в один объект
+        plotly_data = {'data': data, 'layout': layout}
+        return plotly_data
+
+
     def check_visualization_data(self, viz_name, json_str):
         """Проверка корректности JSON-данных визуализации"""
         try:
@@ -711,3 +692,168 @@ class Visualizer:
                     print(f"  - ОШИБКА: Ключ 'layout' отсутствует!")
             except Exception as e:
                 print(f"  - ОШИБКА при чтении/анализе файла: {str(e)}")
+
+    def save_visualizations_as_images(self, project_id, user_id=None, format='png'):
+        """
+        Сохранение визуализаций в виде изображений
+
+        Args:
+            project_id (int): ID проекта
+            user_id (int, optional): ID пользователя. Defaults to None.
+            format (str, optional): Формат сохранения ('png', 'svg', 'pdf', 'jpeg'). Defaults to 'png'.
+
+        Returns:
+            dict: Словарь с путями к сохраненным изображениям
+        """
+        # Создаем структуру директорий
+        if user_id:
+            # Если указан ID пользователя, сохраняем в папке пользователя/проекта
+            image_dir = os.path.join(self.image_output_dir, f"user_{user_id}", f"project_{project_id}")
+        else:
+            # Иначе сохраняем только в папке проекта
+            image_dir = os.path.join(self.image_output_dir, f"project_{project_id}")
+
+        os.makedirs(image_dir, exist_ok=True)
+
+        print(f"Сохранение визуализаций в формате {format} в директорию: {image_dir}")
+
+        # Проверяем установлена ли библиотека kaleido
+        try:
+            import kaleido
+            print("Библиотека kaleido найдена. Продолжаем сохранение изображений...")
+        except ImportError:
+            print("ВНИМАНИЕ: Библиотека kaleido не установлена. Устанавливаем...")
+            try:
+                import subprocess
+                subprocess.check_call(['pip', 'install', 'kaleido'])
+                print("Kaleido успешно установлена.")
+            except Exception as e:
+                print(f"Не удалось установить kaleido: {e}")
+                print("Пробуем альтернативный метод сохранения...")
+
+        # Словарь для хранения путей к файлам
+        image_paths = {}
+
+        # Список визуализаций для сохранения
+        visualizations = {
+            'saturation_profiles': self.create_saturation_profiles_figure([10, 50, 100]),
+            'saturation_difference': self.create_saturation_difference_figure([10, 50, 100]),
+            'recovery_factor': self.create_recovery_factor_figure(),
+            'breakthrough_time': self.create_breakthrough_time_figure(),
+            'saturation_evolution': self.create_saturation_evolution_figure(),
+            'capillary_pressure': self.create_capillary_pressure_curve(),
+            'relative_permeability': self.create_relative_permeability_curves(),
+            'fractional_flow': self.create_fractional_flow_curve()
+        }
+
+        # Сохраняем каждую визуализацию
+        for name, fig in visualizations.items():
+            try:
+                file_path = os.path.join(image_dir, f"{name}.{format}")
+                print(f"Попытка сохранения {name} в формате {format} по пути: {file_path}")
+
+                try:
+                    # Сначала пытаемся с kaleido (стандартный метод Plotly)
+                    if format == 'svg':
+                        fig.write_image(file_path, width=1200, height=800)
+                    else:
+                        fig.write_image(file_path, width=1200, height=800, scale=2)
+                except Exception as e:
+                    print(f"Ошибка при использовании стандартного метода: {e}")
+                    print("Пробуем альтернативный метод...")
+
+                    # Альтернативный метод: сохраняем HTML и конвертируем с помощью браузера
+                    html_path = os.path.join(image_dir, f"{name}_temp.html")
+                    fig.write_html(html_path, include_plotlyjs='cdn')
+
+                    try:
+                        # Пытаемся использовать selenium для рендеринга
+                        from selenium import webdriver
+                        from selenium.webdriver.chrome.options import Options
+
+                        print("Используем Selenium для рендеринга...")
+                        chrome_options = Options()
+                        chrome_options.add_argument("--headless")
+                        chrome_options.add_argument("--disable-gpu")
+                        chrome_options.add_argument("--no-sandbox")
+
+                        driver = webdriver.Chrome(options=chrome_options)
+                        driver.get('file://' + os.path.abspath(html_path))
+                        # Даем время для полной загрузки
+                        import time
+                        time.sleep(2)
+
+                        # Получаем размеры элемента с графиком
+                        plot_div = driver.find_element_by_xpath("//div[contains(@class, 'plotly-graph-div')]")
+                        driver.set_window_size(1200, 800)
+
+                        # Делаем скриншот
+                        driver.save_screenshot(file_path)
+                        driver.quit()
+
+                        # Удаляем временный HTML файл
+                        os.remove(html_path)
+                    except Exception as selenium_error:
+                        print(f"Ошибка при использовании Selenium: {selenium_error}")
+
+                        # Если и Selenium не сработал, просто сообщаем об ошибке
+                        print("Все методы сохранения изображений не удались.")
+                        continue
+
+                # Проверяем, что файл действительно создан
+                if os.path.exists(file_path):
+                    image_paths[name] = file_path
+                    file_size = os.path.getsize(file_path)
+                    print(f"Сохранено изображение: {file_path} (размер: {file_size} байт)")
+                else:
+                    print(f"ОШИБКА: Файл не был создан по пути {file_path}, хотя ошибок не возникло")
+            except Exception as e:
+                print(f"ОШИБКА при сохранении изображения {name}: {str(e)}")
+                import traceback
+                traceback.print_exc()
+
+        print(f"Всего сохранено изображений: {len(image_paths)}")
+        return image_paths
+
+    def save_all_visualization_formats(self, project_id, user_id=None):
+        """
+        Сохранение визуализаций во всех форматах (JSON, PNG, SVG)
+
+        Args:
+            project_id (int): ID проекта
+            user_id (int, optional): ID пользователя. Defaults to None.
+
+        Returns:
+            dict: Словарь с информацией о сохраненных файлах
+        """
+        results = {
+            'json': {},
+            'png': {},
+            'svg': {}
+        }
+
+        # Сохраняем JSON визуализации
+        try:
+            json_results = self.save_visualizations(project_id)
+            results['json'] = {name: True for name in json_results}
+        except Exception as e:
+            print(f"ОШИБКА при сохранении JSON-визуализаций: {str(e)}")
+            traceback.print_exc()
+
+        # Сохраняем PNG изображения
+        try:
+            png_paths = self.save_visualizations_as_images(project_id, user_id, format='png')
+            results['png'] = {name: path for name, path in png_paths.items()}
+        except Exception as e:
+            print(f"ОШИБКА при сохранении PNG-изображений: {str(e)}")
+            traceback.print_exc()
+
+        # Сохраняем SVG изображения
+        try:
+            svg_paths = self.save_visualizations_as_images(project_id, user_id, format='svg')
+            results['svg'] = {name: path for name, path in svg_paths.items()}
+        except Exception as e:
+            print(f"ОШИБКА при сохранении SVG-изображений: {str(e)}")
+            traceback.print_exc()
+
+        return results

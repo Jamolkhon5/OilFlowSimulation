@@ -398,3 +398,101 @@ def export_project_data(project_id):
     }
 
     return jsonify(export_data)
+
+
+
+@api_bp.route('/project/<int:project_id>/images')
+@login_required
+def get_project_images(project_id):
+    """
+    API для получения списка доступных изображений визуализаций
+
+    Args:
+        project_id (int): ID проекта
+    """
+    project = Project.query.get_or_404(project_id)
+
+    # Проверяем, что проект принадлежит текущему пользователю
+    if project.user_id != current_user.id:
+        return jsonify({'error': 'Access denied'}), 403
+
+    # Получаем последний результат моделирования
+    result = project.results.order_by(ProjectResult.created_at.desc()).first()
+
+    if not result:
+        return jsonify({'error': 'No results found'}), 404
+
+    # Получаем данные результатов
+    results_data = result.get_results()
+
+    # Добавляем логирование
+    print(f"Запрос изображений для проекта {project_id}")
+
+    # Проверяем наличие информации о путях к изображениям
+    if 'image_paths' not in results_data:
+        # Если информации нет в результатах, пытаемся найти изображения вручную
+        image_paths = {'png': {}, 'svg': {}}
+
+        # Строим пути к директориям с изображениями
+        user_project_path = os.path.join(
+            current_app.config['IMAGES_FOLDER'],
+            f"user_{current_user.id}",
+            f"project_{project_id}"
+        )
+
+        project_path = os.path.join(
+            current_app.config['IMAGES_FOLDER'],
+            f"project_{project_id}"
+        )
+
+        print(f"Путь к директории пользователя: {user_project_path}")
+        print(f"Путь к директории проекта: {project_path}")
+
+        # Проверяем директорию пользователя
+        if os.path.exists(user_project_path):
+            print(f"Содержимое директории пользователя: {os.listdir(user_project_path)}")
+            for format_type in ['png', 'svg']:
+                for filename in os.listdir(user_project_path):
+                    if filename.endswith(f'.{format_type}'):
+                        name = os.path.splitext(filename)[0]
+                        image_paths[format_type][name] = os.path.join(
+                            f"user_{current_user.id}",
+                            f"project_{project_id}",
+                            filename
+                        )
+                        print(f"Найдено изображение пользователя: {format_type}, {name}, путь: {image_paths[format_type][name]}")
+
+        # Проверяем общую директорию проекта
+        if os.path.exists(project_path):
+            print(f"Содержимое директории проекта: {os.listdir(project_path)}")
+            for format_type in ['png', 'svg']:
+                for filename in os.listdir(project_path):
+                    if filename.endswith(f'.{format_type}'):
+                        name = os.path.splitext(filename)[0]
+                        # Добавляем только если еще нет в списке
+                        if name not in image_paths[format_type]:
+                            image_paths[format_type][name] = os.path.join(
+                                f"project_{project_id}",
+                                filename
+                            )
+                            print(f"Найдено изображение проекта: {format_type}, {name}, путь: {image_paths[format_type][name]}")
+    else:
+        # Если информация есть в результатах, используем ее
+        image_paths = results_data['image_paths']
+        print(f"Изображения из результатов: {image_paths}")
+
+    # Формируем URL для доступа к каждому изображению
+    image_urls = {
+        'png': {},
+        'svg': {}
+    }
+
+    for format_type in ['png', 'svg']:
+        for name, relative_path in image_paths.get(format_type, {}).items():
+            image_urls[format_type][name] = relative_path  # Используем относительный путь напрямую
+            print(f"URL для изображения {name}.{format_type}: {image_urls[format_type][name]}")
+
+    return jsonify({
+        'project_id': project_id,
+        'images': image_urls
+    })

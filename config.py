@@ -18,8 +18,15 @@ class Config:
     UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'uploads')
     RESULTS_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'results')
     TEMP_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'temp')
+    # Новая директория для сохранения изображений
+    IMAGES_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'images')
     ALLOWED_EXTENSIONS = {'csv', 'xlsx', 'xls'}
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB макс. размер файла
+
+    # Настройки сохранения изображений
+    IMAGE_FORMATS = ['png', 'svg']  # Поддерживаемые форматы изображений
+    DEFAULT_IMAGE_FORMAT = 'png'  # Формат по умолчанию
+    SAVE_IMAGES = True  # Флаг для включения/отключения сохранения изображений
 
     # Настройки сессии
     PERMANENT_SESSION_LIFETIME = timedelta(days=7)

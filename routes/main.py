@@ -12,7 +12,7 @@ from datetime import datetime
 from werkzeug.utils import secure_filename
 import pandas as pd
 import numpy as np
-
+from core.matplotlib_visualizer import MatplotlibVisualizer
 from extensions import db, csrf
 from models.user import User
 from models.project import Project, ProjectData, ProjectResult
@@ -20,6 +20,7 @@ from core.model import OilFiltrationModel
 from core.carbonate_model import CarbonateModel
 from core.visualizer import Visualizer
 from core.data_loader import DataLoader
+from routes.api import api_bp
 from utils.file_handlers import save_uploaded_file, allowed_file
 
 main_bp = Blueprint('main', __name__)
@@ -137,6 +138,9 @@ def project_details(project_id):
         flash('У вас нет доступа к этому проекту', 'danger')
         return redirect(url_for('main.dashboard'))
 
+    # Исправляем файлы визуализаций
+    fix_all_visualization_files(project_id)
+
     # Получаем параметры модели
     model_params = project.get_model_parameters()
 
@@ -217,15 +221,58 @@ def run_project(project_id):
         # Извлекаем результаты
         results_data = model.extract_results()
 
-        # Создаем визуализации
-        visualizer = Visualizer(model, output_dir=current_app.config['RESULTS_FOLDER'])
-        visualizations = visualizer.create_visualizations()
+        # Создаем визуализатор Plotly для JSON-представлений (для фронтенда)
+        visualizer = Visualizer(
+            model,
+            output_dir=current_app.config['RESULTS_FOLDER'],
+            image_output_dir=current_app.config['IMAGES_FOLDER']
+        )
 
         # Добавляем визуализации к результатам
-        results_data['visualizations'] = {k: True for k in visualizations.keys()}
+        results_data['visualizations'] = {
+            'saturation_profiles': True,
+            'saturation_difference': True,
+            'recovery_factor': True,
+            'breakthrough_time': True,
+            'saturation_evolution': True,
+            'capillary_pressure': True,
+            'fractional_flow': True,
+            'relative_permeability': True
+        }
 
-        # Сохраняем визуализации
+        # Сохраняем JSON-визуализации для веб-интерфейса
         visualizer.save_visualizations(project_id)
+
+        # Используем MatplotlibVisualizer для создания и сохранения изображений
+        try:
+                        # Создаем экземпляр MatplotlibVisualizer
+            mpl_visualizer = MatplotlibVisualizer(
+                model,
+                output_dir=current_app.config['RESULTS_FOLDER'],
+                image_output_dir=current_app.config['IMAGES_FOLDER']
+            )
+
+            # Сохраняем изображения в форматах PNG и SVG
+            image_paths = mpl_visualizer.save_visualizations_as_images(
+                project_id,
+                user_id=current_user.id,
+                formats=['png', 'svg']
+            )
+
+            # Добавляем информацию о сохраненных изображениях в результаты
+            results_data['image_paths'] = {
+                format_type: {name: os.path.relpath(path, current_app.config['IMAGES_FOLDER'])
+                              for name, path in paths.items()}
+                for format_type, paths in image_paths.items()
+            }
+
+            print(f"Сохранено изображений: PNG - {len(image_paths['png'])}, SVG - {len(image_paths['svg'])}")
+
+        except Exception as e:
+            print(f"ОШИБКА при сохранении изображений: {str(e)}")
+            traceback.print_exc()
+            # Обеспечиваем, чтобы в результатах была пустая структура даже в случае ошибки
+            results_data['image_paths'] = {'png': {}, 'svg': {}}
 
         # Рассчитываем время выполнения
         end_time = time.time()
@@ -261,8 +308,8 @@ def view_results(project_id, result_id):
         flash('У вас нет доступа к этим результатам', 'danger')
         return redirect(url_for('main.dashboard'))
 
-    # Проверяем и исправляем файлы визуализаций
-    fix_all_visualization_files()
+    # Исправляем файлы визуализаций
+    fix_all_visualization_files(project_id)
 
     # Получаем данные результатов
     results_data = result.get_results()
@@ -283,6 +330,9 @@ def get_visualization(project_id, name):
         print(f"Доступ запрещен: проект принадлежит пользователю {project.user_id}, а запрос от {current_user.id}")
         return jsonify({'error': 'Access denied'}), 403
 
+    # Исправляем файл визуализации перед чтением
+    fix_visualization_file(project_id, name)
+
     # Путь к файлу визуализации
     file_path = os.path.join(current_app.config['RESULTS_FOLDER'], str(project_id), f'{name}.json')
     print(f"Путь к файлу визуализации: {file_path}")
@@ -300,13 +350,36 @@ def get_visualization(project_id, name):
             # Проверяем структуру данных
             if 'data' not in visualization_data:
                 print(f"ОШИБКА: В данных визуализации отсутствует ключ 'data'")
+                # Создаем базовую структуру
+                visualization_data = {'data': [], 'layout': {}}
             elif not isinstance(visualization_data['data'], list):
                 print(f"ОШИБКА: visualization_data['data'] не является списком: {type(visualization_data['data'])}")
+                # Корректируем тип данных
+                visualization_data['data'] = []
             else:
                 print(f"visualization_data['data'] содержит {len(visualization_data['data'])} элементов")
 
             if 'layout' not in visualization_data:
                 print(f"ОШИБКА: В данных визуализации отсутствует ключ 'layout'")
+                visualization_data['layout'] = {}
+
+            # Улучшаем стиль графиков
+            if 'layout' in visualization_data:
+                layout = visualization_data['layout']
+
+                # Добавляем отступы, если их нет
+                if 'margin' not in layout:
+                    layout['margin'] = {'l': 60, 'r': 40, 't': 60, 'b': 60}
+
+                # Устанавливаем шрифт
+                if 'font' not in layout:
+                    layout['font'] = {'family': 'Roboto, sans-serif', 'size': 14}
+
+                # Устанавливаем цвет фона
+                if 'plot_bgcolor' not in layout:
+                    layout['plot_bgcolor'] = '#f8f8f8'
+                if 'paper_bgcolor' not in layout:
+                    layout['paper_bgcolor'] = '#ffffff'
 
             return jsonify(visualization_data)
     except Exception as e:
@@ -447,9 +520,106 @@ def about():
     return render_template('about.html')
 
 
+def fix_visualization_file(project_id, viz_name):
+    """Исправление структуры конкретного файла визуализации"""
+    results_folder = current_app.config['RESULTS_FOLDER']
+    file_path = os.path.join(results_folder, str(project_id), f'{viz_name}.json')
+
+    if not os.path.exists(file_path):
+        print(f"Файл визуализации не найден: {file_path}")
+        return False
+
+    try:
+        print(f"Проверка файла визуализации: {file_path}")
+        with open(file_path, 'r', encoding='utf-8') as f:
+            json_data = json.load(f)
+
+        # Проверяем структуру
+        fixed = False
+
+        # Создаем правильную структуру данных
+        corrected_data = {
+            "data": [],
+            "layout": {}
+        }
+
+        # Проверяем наличие данных и наполняем структуру
+        if 'data' in json_data and isinstance(json_data['data'], list):
+            corrected_data["data"] = json_data["data"]
+        elif 'traces' in json_data and isinstance(json_data['traces'], list):
+            corrected_data["data"] = json_data["traces"]
+        elif 'frames' in json_data and isinstance(json_data['frames'], list) and len(json_data['frames']) > 0:
+            if 'data' in json_data['frames'][0] and isinstance(json_data['frames'][0]['data'], list):
+                corrected_data["data"] = json_data["frames"][0]["data"]
+
+        # Проверяем макет
+        if 'layout' in json_data and isinstance(json_data['layout'], dict):
+            corrected_data["layout"] = json_data["layout"]
+
+        # Исправляем данные трасс
+        for i, trace in enumerate(corrected_data["data"]):
+            # Обработка координат x, y, z
+            for key in ['x', 'y', 'z']:
+                if key in trace and isinstance(trace[key], dict):
+                    # Преобразуем объекты с бинарными данными в обычные массивы
+                    if 'data' in trace[key] and isinstance(trace[key]['data'], list):
+                        corrected_data["data"][i][key] = trace[key]['data']
+                    elif 'original' in trace[key] and isinstance(trace[key]['original'], list):
+                        corrected_data["data"][i][key] = trace[key]['original']
+                    # Сохраняем ссылку на бинарные данные, если других нет
+                    elif 'bdata' in trace[key] and not corrected_data["data"][i][key]:
+                        # Просто оставим объект как есть, JavaScript-код попытается его обработать
+                        pass
+
+            # Убеждаемся, что trace имеет тип
+            if 'type' not in trace:
+                if 'mode' in trace and 'markers' in trace['mode']:
+                    corrected_data["data"][i]['type'] = 'scatter'
+                elif 'z' in trace and isinstance(trace['z'], list):
+                    corrected_data["data"][i]['type'] = 'contour'
+                else:
+                    corrected_data["data"][i]['type'] = 'scatter'
+
+        # Определяем, были ли внесены изменения
+        if corrected_data != json_data:
+            fixed = True
+            # Сохраняем исправленный файл
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(corrected_data, f, indent=2)
+            print(f"Файл визуализации исправлен и сохранен: {viz_name}")
+
+        return fixed
+    except Exception as e:
+        print(f"ОШИБКА при обработке файла визуализации {viz_name}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+
+        # В случае ошибки создаем минимальный рабочий JSON
+        try:
+            minimal_data = {
+                "data": [{
+                    "type": "scatter",
+                    "mode": "lines",
+                    "x": [0, 1, 2, 3, 4, 5],
+                    "y": [0, 1, 0, 1, 0, 1],
+                    "name": "Данные недоступны"
+                }],
+                "layout": {
+                    "title": f"Ошибка загрузки: {viz_name}",
+                    "xaxis": {"title": "X"},
+                    "yaxis": {"title": "Y"}
+                }
+            }
+
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(minimal_data, f, indent=2)
+            print(f"Создан минимальный файл визуализации для {viz_name}")
+            return True
+        except:
+            return False
 
 
-def fix_all_visualization_files():
+def fix_all_visualization_files(project_id=None):
     """Исправление всех файлов визуализации в директории результатов"""
     results_folder = current_app.config['RESULTS_FOLDER']
 
@@ -459,54 +629,134 @@ def fix_all_visualization_files():
 
     print(f"Сканирование директории результатов: {results_folder}")
 
-    # Сканируем все поддиректории проектов
-    project_dirs = [d for d in os.listdir(results_folder) if os.path.isdir(os.path.join(results_folder, d))]
+    # Если указан конкретный проект, проверяем только его
+    if project_id:
+        project_dirs = [str(project_id)]
+    else:
+        # Сканируем все поддиректории проектов
+        project_dirs = [d for d in os.listdir(results_folder) if os.path.isdir(os.path.join(results_folder, d))]
+
     print(f"Найдено {len(project_dirs)} директорий проектов")
 
     for project_dir in project_dirs:
         project_path = os.path.join(results_folder, project_dir)
-        json_files = [f for f in os.listdir(project_path) if f.endswith('.json')]
+        try:
+            json_files = [f for f in os.listdir(project_path) if f.endswith('.json')]
+            print(f"Проект {project_dir}: найдено {len(json_files)} JSON-файлов")
 
-        print(f"Проект {project_dir}: найдено {len(json_files)} JSON-файлов")
+            for json_file in json_files:
+                viz_name = json_file.replace('.json', '')
+                fix_visualization_file(project_dir, viz_name)
+        except Exception as e:
+            print(f"Ошибка при сканировании проекта {project_dir}: {str(e)}")
 
-        for json_file in json_files:
-            file_path = os.path.join(project_path, json_file)
-            print(f"Проверка файла: {json_file}")
 
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    json_data = json.load(f)
+@main_bp.route('/project/<int:project_id>/image/<path:image_path>')
+@login_required
+def get_project_image(project_id, image_path):
+    """
+    Получение изображения визуализации для проекта
 
-                # Проверяем и исправляем структуру
-                fixed = False
-                if 'data' not in json_data or not isinstance(json_data['data'], list):
-                    fixed = True
+    Args:
+        project_id (int): ID проекта
+        image_path (str): Относительный путь к изображению
+    """
+    project = Project.query.get_or_404(project_id)
 
-                    # Создаем правильную структуру
-                    corrected_data = {
-                        "data": [],
-                        "layout": {}
-                    }
+    # Проверяем, что проект принадлежит текущему пользователю
+    if project.user_id != current_user.id:
+        flash('У вас нет доступа к этому проекту', 'danger')
+        return redirect(url_for('main.dashboard'))
 
-                    # Ищем массив данных в JSON
-                    if 'traces' in json_data and isinstance(json_data['traces'], list):
-                        corrected_data["data"] = json_data["traces"]
-                    elif 'frames' in json_data and isinstance(json_data['frames'], list) and len(
-                            json_data['frames']) > 0:
-                        if 'data' in json_data['frames'][0] and isinstance(json_data['frames'][0]['data'], list):
-                            corrected_data["data"] = json_data["frames"][0]["data"]
+    print(f"Запрос изображения для проекта {project_id}, путь: {image_path}")
 
-                    # Ищем макет в JSON
-                    if 'layout' in json_data and isinstance(json_data['layout'], dict):
-                        corrected_data["layout"] = json_data["layout"]
+    # Получаем только имя файла без путей
+    filename = os.path.basename(image_path)
+    print(f"Имя файла: {filename}")
 
-                    # Сохраняем исправленный файл
-                    with open(file_path, 'w', encoding='utf-8') as f:
-                        json.dump(corrected_data, f, indent=2)
-                    print(f"  - Файл исправлен и сохранен.")
+    # Путь к папке пользователя
+    user_project_path = os.path.join(
+        current_app.config['IMAGES_FOLDER'],
+        f"user_{current_user.id}",
+        f"project_{project_id}"
+    )
 
-                if not fixed:
-                    print(f"  - Файл имеет корректную структуру.")
+    # Путь к файлу в папке пользователя
+    file_path = os.path.join(user_project_path, filename)
+    print(f"Ищем файл: {file_path}")
 
-            except Exception as e:
-                print(f"  - ОШИБКА при обработке файла: {str(e)}")
+    if os.path.exists(file_path):
+        print(f"Файл найден: {file_path}")
+        return send_from_directory(user_project_path, filename)
+
+    # Проверяем общую папку проекта
+    project_path = os.path.join(
+        current_app.config['IMAGES_FOLDER'],
+        f"project_{project_id}"
+    )
+
+    file_path = os.path.join(project_path, filename)
+    print(f"Ищем файл в общей директории: {file_path}")
+
+    if os.path.exists(file_path):
+        print(f"Файл найден: {file_path}")
+        return send_from_directory(project_path, filename)
+
+    print(f"Файл не найден")
+    return jsonify({'error': 'Image not found'}), 404
+
+
+
+
+@main_bp.route('/project/<int:project_id>/download/image/<image_type>/<image_name>')
+@login_required
+def download_project_image(project_id, image_type, image_name):
+    """
+    Скачивание конкретного изображения визуализации
+
+    Args:
+        project_id (int): ID проекта
+        image_type (str): Тип изображения ('png' или 'svg')
+        image_name (str): Имя изображения
+    """
+    project = Project.query.get_or_404(project_id)
+
+    # Проверяем, что проект принадлежит текущему пользователю
+    if project.user_id != current_user.id:
+        flash('У вас нет доступа к этому проекту', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    # Проверяем корректность типа изображения
+    if image_type not in ['png', 'svg']:
+        return jsonify({'error': 'Invalid image type'}), 400
+
+    # Строим путь к изображению для конкретного пользователя и проекта
+    user_project_path = os.path.join(
+        current_app.config['IMAGES_FOLDER'],
+        f"user_{current_user.id}",
+        f"project_{project_id}"
+    )
+
+    # Если директории нет или изображения нет в папке пользователя, ищем в общей папке проекта
+    file_path = os.path.join(user_project_path, f"{image_name}.{image_type}")
+    if not os.path.exists(file_path):
+        user_project_path = os.path.join(
+            current_app.config['IMAGES_FOLDER'],
+            f"project_{project_id}"
+        )
+        file_path = os.path.join(user_project_path, f"{image_name}.{image_type}")
+
+    # Проверяем существование файла
+    if not os.path.exists(file_path):
+        return jsonify({'error': 'Image not found'}), 404
+
+    # Более понятное имя файла для скачивания
+    download_name = f"{project.name}_{image_name}.{image_type}"
+
+    # Возвращаем изображение для скачивания с attachment_filename
+    return send_from_directory(
+        user_project_path,
+        f"{image_name}.{image_type}",
+        as_attachment=True,
+        download_name=download_name
+    )

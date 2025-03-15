@@ -195,5 +195,30 @@ class CarbonateModel(OilFiltrationModel):
 
         results['matrix_fracture_profiles'] = matrix_fracture_profiles
 
+        # Добавляем эффективность вытеснения для матрицы и трещин
+        # Средняя нефтенасыщенность в матрице и трещинах для последнего шага по времени
+        final_index = self.nt - 1
+        avg_oil_matrix = 1 - np.mean(self.Sw_matrix[final_index, :])
+        avg_oil_fracture = 1 - np.mean(self.Sw_fracture[final_index, :])
+
+        # Начальная нефтенасыщенность
+        initial_oil = 1 - self.initial_water_saturation
+
+        # Эффективность вытеснения в матрице и трещинах
+        recovery_matrix = (initial_oil - avg_oil_matrix) / initial_oil
+        recovery_fracture = (initial_oil - avg_oil_fracture) / initial_oil
+
+        # Интенсивность обмена между матрицей и трещинами
+        # Средний перепад капиллярного давления
+        pc_matrix_avg = np.mean([self.capillary_pressure(sw) for sw in self.Sw_matrix[final_index, :]])
+        exchange_intensity = self.shape_factor * pc_matrix_avg
+
+        # Добавляем карбонатные метрики в результаты
+        results['carbonate_metrics'] = {
+            'matrix_recovery': float(recovery_matrix),
+            'fracture_recovery': float(recovery_fracture),
+            'matrix_fracture_exchange': float(exchange_intensity)
+        }
+
         return results
 

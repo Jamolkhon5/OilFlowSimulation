@@ -241,7 +241,7 @@ class OilFiltrationModel:
         # Получение времени прорыва
         breakthrough_with_cap, breakthrough_without_cap = self.get_breakthrough_time()
 
-        # Расчет скорости фронта (реальные данные вместо предполагаемых)
+        # Расчет скорости фронта
         velocity_with_cap = self.length / max(breakthrough_with_cap, 0.001)
         velocity_without_cap = self.length / max(breakthrough_without_cap, 0.001)
 
@@ -279,6 +279,92 @@ class OilFiltrationModel:
                     'without_cap': self.Sw_without_cap[time_index, :].tolist(),
                 }
 
+        # ===== ДОПОЛНИТЕЛЬНЫЕ ПАРАМЕТРЫ =====
+
+        # 1. Объемные показатели
+        pore_volume = self.length * self.porosity  # м³ порового пространства
+        initial_oil = pore_volume * (1 - self.initial_water_saturation)  # м³ начальной нефти
+
+        # Индекс для последнего дня моделирования
+        final_index = len(recovery_with_cap) - 1
+
+        # Объемы добытой нефти
+        produced_oil_with_cap = initial_oil * recovery_with_cap[final_index]
+        produced_oil_without_cap = initial_oil * recovery_without_cap[final_index]
+
+        # Объемы закачанной воды (приблизительно, считаем по поровому объему)
+        injected_water_with_cap = pore_volume * 1.2  # Коэффициент 1.2 учитывает перемещение воды за границы модели
+        injected_water_without_cap = pore_volume * 1.2
+
+        # Водонефтяной фактор
+        wor_with_cap = injected_water_with_cap / max(produced_oil_with_cap, 0.001)
+        wor_without_cap = injected_water_without_cap / max(produced_oil_without_cap, 0.001)
+
+        # 2. Временные показатели
+        # Время достижения 50% нефтеотдачи
+        time_to_50_with_cap = self.days  # По умолчанию, если не достигнуто
+        time_to_50_without_cap = self.days  # По умолчанию, если не достигнуто
+
+        for i, recovery in enumerate(recovery_with_cap):
+            if recovery >= 0.5:
+                time_to_50_with_cap = self.t[i]
+                break
+
+        for i, recovery in enumerate(recovery_without_cap):
+            if recovery >= 0.5:
+                time_to_50_without_cap = self.t[i]
+                break
+
+        # Прогнозируемое время полного истощения (экстраполяция по последним точкам)
+        if final_index > 10:
+            # Линейная экстраполяция на основе последних 10 точек
+            recent_times = self.t[final_index - 10:final_index]
+            recent_recovery_with_cap = recovery_with_cap[final_index - 10:final_index]
+            recent_recovery_without_cap = recovery_without_cap[final_index - 10:final_index]
+
+            # Нахождение коэффициентов линейной экстраполяции
+            if np.std(recent_recovery_with_cap) > 0.001:  # Проверка на изменение значений
+                slope_with_cap = np.polyfit(recent_times, recent_recovery_with_cap, 1)[0]
+                remaining_recovery_with_cap = 1.0 - recovery_with_cap[final_index] - self.residual_oil_saturation
+                time_to_complete_with_cap = self.days
+                if slope_with_cap > 0.0001:  # Если есть положительный рост
+                    time_to_complete_with_cap = self.days + remaining_recovery_with_cap / slope_with_cap
+            else:
+                time_to_complete_with_cap = float('inf')  # Если нет изменений, бесконечность
+
+            if np.std(recent_recovery_without_cap) > 0.001:
+                slope_without_cap = np.polyfit(recent_times, recent_recovery_without_cap, 1)[0]
+                remaining_recovery_without_cap = 1.0 - recovery_without_cap[final_index] - self.residual_oil_saturation
+                time_to_complete_without_cap = self.days
+                if slope_without_cap > 0.0001:
+                    time_to_complete_without_cap = self.days + remaining_recovery_without_cap / slope_without_cap
+            else:
+                time_to_complete_without_cap = float('inf')
+        else:
+            time_to_complete_with_cap = float('inf')
+            time_to_complete_without_cap = float('inf')
+
+        # 3. Физические показатели
+        # Максимальный перепад капиллярного давления
+        pc_values = [self.capillary_pressure(sw) for sw in
+                     np.linspace(self.initial_water_saturation, 1 - self.residual_oil_saturation, 100)]
+        max_pc_diff = max(pc_values) - min(pc_values)
+
+        # Среднее число капиллярности (отношение вязкостных сил к капиллярным)
+        # Ca = (μv)/σ, где μ - вязкость, v - скорость, σ - поверхностное натяжение
+        # Берем приблизительное значение поверхностного натяжения
+        surface_tension = 0.03  # Н/м (примерное значение для системы нефть-вода)
+        velocity_avg = (velocity_with_cap + velocity_without_cap) / 2 / 86400  # м/с
+        viscosity_avg = (self.mu_oil + self.mu_water) / 2 * 0.001  # Па·с
+        capillary_number = viscosity_avg * velocity_avg / surface_tension
+
+        # Коэффициент подвижности флюидов (отношение подвижности воды к подвижности нефти)
+        # λw/λo = (krw/μw)/(kro/μo)
+        # Берем значение при насыщенности 0.5
+        krw_at_50 = self.relative_permeability_water(0.5)
+        kro_at_50 = self.relative_permeability_oil(0.5)
+        mobility_ratio = (krw_at_50 / self.mu_water) / (kro_at_50 / self.mu_oil)
+
         # Формирование результата
         results = {
             'parameters': {
@@ -314,6 +400,38 @@ class OilFiltrationModel:
                     'with_cap': float(width_with_cap),
                     'without_cap': float(width_without_cap)
                 }
+            },
+            # Новые результаты
+            'volume_metrics': {
+                'initial_oil': float(initial_oil),
+                'produced_oil': {
+                    'with_cap': float(produced_oil_with_cap),
+                    'without_cap': float(produced_oil_without_cap)
+                },
+                'injected_water': {
+                    'with_cap': float(injected_water_with_cap),
+                    'without_cap': float(injected_water_without_cap)
+                },
+                'water_oil_ratio': {
+                    'with_cap': float(wor_with_cap),
+                    'without_cap': float(wor_without_cap)
+                }
+            },
+            'time_metrics': {
+                'time_to_50_percent': {
+                    'with_cap': float(time_to_50_with_cap),
+                    'without_cap': float(time_to_50_without_cap)
+                },
+                'estimated_completion_time': {
+                    'with_cap': float(time_to_complete_with_cap) if time_to_complete_with_cap != float('inf') else -1,
+                    'without_cap': float(time_to_complete_without_cap) if time_to_complete_without_cap != float(
+                        'inf') else -1
+                }
+            },
+            'physical_parameters': {
+                'max_capillary_pressure_difference': float(max_pc_diff),
+                'capillary_number': float(capillary_number),
+                'mobility_ratio': float(mobility_ratio)
             }
         }
 
