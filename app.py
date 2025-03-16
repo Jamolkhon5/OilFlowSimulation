@@ -56,6 +56,14 @@ def create_app(config_class=Config):
     with app.app_context():
         db.create_all()
 
+    @app.after_request
+    def add_no_cache_headers(response):
+        """Добавляет заголовки для отключения кеширования"""
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
+
     return app
 
 

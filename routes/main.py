@@ -476,33 +476,34 @@ def edit_project(project_id):
 @login_required
 def delete_project(project_id):
     """Удаление проекта"""
+    print(f"Начинаем удаление проекта {project_id}")
+
     project = Project.query.get_or_404(project_id)
+    print(f"Проект найден: {project.name}")
 
     # Проверяем, что проект принадлежит текущему пользователю
     if project.user_id != current_user.id:
+        print(f"Отказано в доступе. Проект принадлежит пользователю {project.user_id}, а не {current_user.id}")
         flash('У вас нет доступа к этому проекту', 'danger')
         return redirect(url_for('main.dashboard'))
 
-    # Удаляем файлы проекта
-    project_upload_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], str(project_id))
-    project_results_dir = os.path.join(current_app.config['RESULTS_FOLDER'], str(project_id))
-
     try:
-        if os.path.exists(project_upload_dir):
-            for file in os.listdir(project_upload_dir):
-                os.remove(os.path.join(project_upload_dir, file))
-            os.rmdir(project_upload_dir)
+        # Удаляем проект из базы данных
+        db.session.delete(project)
+        db.session.commit()
+        print(f"Проект удален из базы данных, коммит выполнен")
 
-        if os.path.exists(project_results_dir):
-            for file in os.listdir(project_results_dir):
-                os.remove(os.path.join(project_results_dir, file))
-            os.rmdir(project_results_dir)
+        # Проверяем, действительно ли проект удален
+        check_project = Project.query.get(project_id)
+        if check_project:
+            print(f"ОШИБКА: Проект все еще существует после удаления!")
+        else:
+            print(f"Подтверждено: проект {project_id} не найден в базе данных")
+
     except Exception as e:
-        flash(f'Ошибка при удалении файлов проекта: {str(e)}', 'warning')
-
-    # Удаляем проект из базы данных
-    db.session.delete(project)
-    db.session.commit()
+        print(f"ОШИБКА при удалении проекта из базы данных: {str(e)}")
+        flash(f'Ошибка при удалении проекта: {str(e)}', 'danger')
+        return redirect(url_for('main.dashboard'))
 
     flash('Проект успешно удален', 'success')
     return redirect(url_for('main.dashboard'))
