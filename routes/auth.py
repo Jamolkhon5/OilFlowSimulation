@@ -89,11 +89,8 @@ def register():
             flash('Пользователь с таким email уже существует', 'danger')
             return redirect(url_for('auth.register'))
 
-        # Проверяем, что пользователь с таким username не существует
-        user_username = User.query.filter_by(username=username).first()
-        if user_username:
-            flash('Пользователь с таким именем уже существует', 'danger')
-            return redirect(url_for('auth.register'))
+        # Удалена проверка уникальности имени пользователя
+        # Теперь разрешается регистрировать пользователей с одинаковыми именами
 
         # Создаем нового пользователя
         new_user = User(
