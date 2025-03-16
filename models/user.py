@@ -5,7 +5,7 @@ from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 from extensions import db
-
+from models.project import Project
 
 class User(UserMixin, db.Model):
     """Модель пользователя для аутентификации и управления проектами"""
@@ -21,6 +21,8 @@ class User(UserMixin, db.Model):
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime, nullable=True)
+    reset_token = db.Column(db.String(32), nullable=True)  # Токен для сброса пароля
+    reset_token_expiry = db.Column(db.DateTime, nullable=True)  # Срок действия токена
 
     # Отношение один-ко-многим с проектами
     projects = db.relationship('Project', backref='owner', lazy='dynamic')

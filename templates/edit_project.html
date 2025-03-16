@@ -1,0 +1,428 @@
+{% extends "base.html" %}
+
+{% block title %}Редактирование проекта - {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1>Редактирование проекта</h1>
+        <p class="lead">Измените параметры моделирования и загрузите новые данные при необходимости.</p>
+    </div>
+    <div class="col-md-4 text-md-end">
+        <a href="{{ url_for('main.project_details', project_id=project.id) }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Назад к проекту
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form id="project-form" method="post" enctype="multipart/form-data" action="{{ url_for('main.edit_project', project_id=project.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+
+            <!-- Основные параметры проекта -->
+            <h3 class="mb-4">Основные параметры</h3>
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="name" class="form-label">Название проекта <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="name" name="name" value="{{ project.name }}" required>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="rock_type" class="form-label">Тип породы</label>
+                        <select class="form-select" id="rock_type" name="rock_type">
+                            <option value="">Выберите тип породы</option>
+                            <option value="Песчаник" {% if project.rock_type == 'Песчаник' %}selected{% endif %}>Песчаник</option>
+                            <option value="Известняк" {% if project.rock_type == 'Известняк' %}selected{% endif %}>Известняк</option>
+                            <option value="Доломит" {% if project.rock_type == 'Доломит' %}selected{% endif %}>Доломит</option>
+                            <option value="Трещиноватый известняк" {% if project.rock_type == 'Трещиноватый известняк' %}selected{% endif %}>Трещиноватый известняк</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group mb-4">
+                <label for="description" class="form-label">Описание проекта</label>
+                <textarea class="form-control" id="description" name="description" rows="3">{{ project.description }}</textarea>
+            </div>
+
+            <div class="form-group mb-4">
+                <label class="form-label">Тип модели <span class="text-danger">*</span></label>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="model_type" id="model_type_basic" value="basic" {% if project.model_type == 'basic' %}checked{% endif %} disabled>
+                    <label class="form-check-label" for="model_type_basic">
+                        Базовая модель
+                    </label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="model_type" id="model_type_carbonate" value="carbonate" {% if project.model_type == 'carbonate' %}checked{% endif %} disabled>
+                    <label class="form-check-label" for="model_type_carbonate">
+                        Модель для карбонатных коллекторов
+                    </label>
+                </div>
+                <small class="text-muted">Тип модели нельзя изменить после создания проекта.</small>
+                <input type="hidden" name="model_type" value="{{ project.model_type }}">
+            </div>
+
+            <!-- Параметры модели -->
+            <h3 class="mb-4">Параметры модели</h3>
+
+            <!-- Параметры пласта -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Параметры пласта</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3 model-param">
+                            <label for="length" class="form-label">Длина пласта</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="length" name="length" value="{{ model_params.length }}" min="{{ param_limits.length.min }}" max="{{ param_limits.length.max }}" step="{{ param_limits.length.step }}">
+                                <span class="input-group-text">{{ param_limits.length.unit }}</span>
+                            </div>
+                            <div class="range-container mt-2">
+                                <input type="range" data-target="length" min="{{ param_limits.length.min }}" max="{{ param_limits.length.max }}" step="{{ param_limits.length.step }}">
+                                <span class="range-value">{{ model_params.length }} {{ param_limits.length.unit }}</span>
+                            </div>
+                            <div class="invalid-feedback"></div>
+                        </div>
+
+                        <div class="col-md-6 mb-3 model-param">
+                            <label for="porosity" class="form-label">Пористость</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="porosity" name="porosity" value="{{ model_params.porosity }}" min="{{ param_limits.porosity.min }}" max="{{ param_limits.porosity.max }}" step="{{ param_limits.porosity.step }}">
+                                <span class="input-group-text">{{ param_limits.porosity.unit }}</span>
+                            </div>
+                            <div class="range-container mt-2">
+                                <input type="range" data-target="porosity" min="{{ param_limits.porosity.min }}" max="{{ param_limits.porosity.max }}" step="{{ param_limits.porosity.step }}">
+                                <span class="range-value">{{ model_params.porosity }} {{ param_limits.porosity.unit }}</span>
+                            </div>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                    </div>
+
+                    <!-- Дополнительные параметры для карбонатной модели -->
+                    <div class="row carbonate-only" {% if project.model_type != 'carbonate' %}style="display: none;"{% endif %}>
+                        <div class="col-md-6 mb-3 model-param">
+                            <label for="fracture_porosity" class="form-label">Пористость трещин</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="fracture_porosity" name="fracture_porosity" value="{{ model_params.fracture_porosity }}" min="{{ param_limits.fracture_porosity.min }}" max="{{ param_limits.fracture_porosity.max }}" step="{{ param_limits.fracture_porosity.step }}">
+                                <span class="input-group-text">{{ param_limits.fracture_porosity.unit }}</span>
+                            </div>
+                            <div class="range-container mt-2">
+                                <input type="range" data-target="fracture_porosity" min="{{ param_limits.fracture_porosity.min }}" max="{{ param_limits.fracture_porosity.max }}" step="{{ param_limits.fracture_porosity.step }}">
+                                <span class="range-value">{{ model_params.fracture_porosity }} {{ param_limits.fracture_porosity.unit }}</span>
+                            </div>
+                            <div class="invalid-feedback"></div>
+                        </div>
+
+                        <div class="col-md-6 mb-3 model-param">
+                            <label for="matrix_permeability" class="form-label">Проницаемость матрицы</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="matrix_permeability" name="matrix_permeability" value="{{ model_params.matrix_permeability }}" min="{{ param_limits.matrix_permeability.min }}" max="{{ param_limits.matrix_permeability.max }}" step="{{ param_limits.matrix_permeability.step }}">
+                                <span class="input-group-text">{{ param_limits.matrix_permeability.unit }}</span>
+                            </div>
+                            <div class="range-container mt-2">
+                                <input type="range" data-target="matrix_permeability" min="{{ param_limits.matrix_permeability.min }}" max="{{ param_limits.matrix_permeability.max }}" step="{{ param_limits.matrix_permeability.step }}">
+                                <span class="range-value">{{ model_params.matrix_permeability }} {{ param_limits.matrix_permeability.unit }}</span>
+                            </div>
+                            <div class="invalid-feedback"></div>
+                        </div>
+
+                        <div class="col-md-6 mb-3 model-param">
+                            <label for="fracture_permeability" class="form-label">Проницаемость трещин</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="fracture_permeability" name="fracture_permeability" value="{{ model_params.fracture_permeability }}" min="{{ param_limits.fracture_permeability.min }}" max="{{ param_limits.fracture_permeability.max }}" step="{{ param_limits.fracture_permeability.step }}">
+                                <span class="input-group-text">{{ param_limits.fracture_permeability.unit }}</span>
+                            </div>
+                            <div class="range-container mt-2">
+                                <input type="range" data-target="fracture_permeability" min="{{ param_limits.fracture_permeability.min }}" max="{{ param_limits.fracture_permeability.max }}" step="{{ param_limits.fracture_permeability.step }}">
+                                <span class="range-value">{{ model_params.fracture_permeability }} {{ param_limits.fracture_permeability.unit }}</span>
+                            </div>
+                            <div class="invalid-feedback"></div>
+                        </div>
+
+                        <div class="col-md-6 mb-3 model-param">
+                            <label for="shape_factor" class="form-label">Форм-фактор</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="shape_factor" name="shape_factor" value="{{ model_params.shape_factor }}" min="{{ param_limits.shape_factor.min }}" max="{{ param_limits.shape_factor.max }}" step="{{ param_limits.shape_factor.step }}">
+                                <span class="input-group-text">{{ param_limits.shape_factor.unit }}</span>
+                            </div>
+                            <div class="range-container mt-2">
+                                <input type="range" data-target="shape_factor" min="{{ param_limits.shape_factor.min }}" max="{{ param_limits.shape_factor.max }}" step="{{ param_limits.shape_factor.step }}">
+                                <span class="range-value">{{ model_params.shape_factor }} {{ param_limits.shape_factor.unit }}</span>
+                            </div>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Параметры флюидов -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Параметры флюидов</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3 model-param">
+                            <label for="mu_oil" class="form-label">Вязкость нефти</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="mu_oil" name="mu_oil" value="{{ model_params.mu_oil }}" min="{{ param_limits.mu_oil.min }}" max="{{ param_limits.mu_oil.max }}" step="{{ param_limits.mu_oil.step }}">
+                                <span class="input-group-text">{{ param_limits.mu_oil.unit }}</span>
+                            </div>
+                            <div class="range-container mt-2">
+                                <input type="range" data-target="mu_oil" min="{{ param_limits.mu_oil.min }}" max="{{ param_limits.mu_oil.max }}" step="{{ param_limits.mu_oil.step }}">
+                                <span class="range-value">{{ model_params.mu_oil }} {{ param_limits.mu_oil.unit }}</span>
+                            </div>
+                            <div class="invalid-feedback"></div>
+                        </div>
+
+                        <div class="col-md-6 mb-3 model-param">
+                            <label for="mu_water" class="form-label">Вязкость воды</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="mu_water" name="mu_water" value="{{ model_params.mu_water }}" min="{{ param_limits.mu_water.min }}" max="{{ param_limits.mu_water.max }}" step="{{ param_limits.mu_water.step }}">
+                                <span class="input-group-text">{{ param_limits.mu_water.unit }}</span>
+                            </div>
+                            <div class="range-container mt-2">
+                                <input type="range" data-target="mu_water" min="{{ param_limits.mu_water.min }}" max="{{ param_limits.mu_water.max }}" step="{{ param_limits.mu_water.step }}">
+                                <span class="range-value">{{ model_params.mu_water }} {{ param_limits.mu_water.unit }}</span>
+                            </div>
+                            <div class="invalid-feedback"></div>
+                        </div>
+
+                        <div class="col-md-6 mb-3 model-param">
+                            <label for="initial_water_saturation" class="form-label">Начальная водонасыщенность</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="initial_water_saturation" name="initial_water_saturation" value="{{ model_params.initial_water_saturation }}" min="{{ param_limits.initial_water_saturation.min }}" max="{{ param_limits.initial_water_saturation.max }}" step="{{ param_limits.initial_water_saturation.step }}">
+                                <span class="input-group-text">{{ param_limits.initial_water_saturation.unit }}</span>
+                            </div>
+                            <div class="range-container mt-2">
+                                <input type="range" data-target="initial_water_saturation" min="{{ param_limits.initial_water_saturation.min }}" max="{{ param_limits.initial_water_saturation.max }}" step="{{ param_limits.initial_water_saturation.step }}">
+                                <span class="range-value">{{ model_params.initial_water_saturation }} {{ param_limits.initial_water_saturation.unit }}</span>
+                            </div>
+                            <div class="invalid-feedback"></div>
+                        </div>
+
+                        <div class="col-md-6 mb-3 model-param">
+                            <label for="residual_oil_saturation" class="form-label">Остаточная нефтенасыщенность</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="residual_oil_saturation" name="residual_oil_saturation" value="{{ model_params.residual_oil_saturation }}" min="{{ param_limits.residual_oil_saturation.min }}" max="{{ param_limits.residual_oil_saturation.max }}" step="{{ param_limits.residual_oil_saturation.step }}">
+                                <span class="input-group-text">{{ param_limits.residual_oil_saturation.unit }}</span>
+                            </div>
+                            <div class="range-container mt-2">
+                                <input type="range" data-target="residual_oil_saturation" min="{{ param_limits.residual_oil_saturation.min }}" max="{{ param_limits.residual_oil_saturation.max }}" step="{{ param_limits.residual_oil_saturation.step }}">
+                                <span class="range-value">{{ model_params.residual_oil_saturation }} {{ param_limits.residual_oil_saturation.unit }}</span>
+                            </div>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Капиллярные параметры -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Капиллярные параметры</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3 model-param">
+                            <label for="entry_pressure" class="form-label">Давление входа</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="entry_pressure" name="entry_pressure" value="{{ model_params.entry_pressure }}" min="{{ param_limits.entry_pressure.min }}" max="{{ param_limits.entry_pressure.max }}" step="{{ param_limits.entry_pressure.step }}">
+                                <span class="input-group-text">{{ param_limits.entry_pressure.unit }}</span>
+                            </div>
+                            <div class="range-container mt-2">
+                                <input type="range" data-target="entry_pressure" min="{{ param_limits.entry_pressure.min }}" max="{{ param_limits.entry_pressure.max }}" step="{{ param_limits.entry_pressure.step }}">
+                                <span class="range-value">{{ model_params.entry_pressure }} {{ param_limits.entry_pressure.unit }}</span>
+                            </div>
+                            <div class="invalid-feedback"></div>
+                        </div>
+
+                        <div class="col-md-6 mb-3 model-param">
+                            <label for="pore_distribution_index" class="form-label">Индекс распределения пор</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="pore_distribution_index" name="pore_distribution_index" value="{{ model_params.pore_distribution_index }}" min="{{ param_limits.pore_distribution_index.min }}" max="{{ param_limits.pore_distribution_index.max }}" step="{{ param_limits.pore_distribution_index.step }}">
+                                <span class="input-group-text">{{ param_limits.pore_distribution_index.unit }}</span>
+                            </div>
+                            <div class="range-container mt-2">
+                                <input type="range" data-target="pore_distribution_index" min="{{ param_limits.pore_distribution_index.min }}" max="{{ param_limits.pore_distribution_index.max }}" step="{{ param_limits.pore_distribution_index.step }}">
+                                <span class="range-value">{{ model_params.pore_distribution_index }} {{ param_limits.pore_distribution_index.unit }}</span>
+                            </div>
+                            <div class="invalid-feedback"></div>
+                        </div>
+
+                        <div class="col-md-6 mb-3 model-param">
+                            <label for="wettability_factor" class="form-label">Коэффициент смачиваемости</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="wettability_factor" name="wettability_factor" value="{{ model_params.wettability_factor }}" min="{{ param_limits.wettability_factor.min }}" max="{{ param_limits.wettability_factor.max }}" step="{{ param_limits.wettability_factor.step }}">
+                                <span class="input-group-text">{{ param_limits.wettability_factor.unit }}</span>
+                            </div>
+                            <div class="range-container mt-2">
+                                <input type="range" data-target="wettability_factor" min="{{ param_limits.wettability_factor.min }}" max="{{ param_limits.wettability_factor.max }}" step="{{ param_limits.wettability_factor.step }}">
+                                <span class="range-value">{{ model_params.wettability_factor }} {{ param_limits.wettability_factor.unit }}</span>
+                            </div>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Загрузка файлов -->
+            <h3 class="mb-4">Загрузка данных (опционально)</h3>
+            <div class="card mb-4">
+                <div class="card-body">
+                    <p class="text-muted">Загрузите новые файлы с данными для использования в модели. Все файлы должны быть в формате CSV с разделителем запятой или точки с запятой.</p>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="rock_properties" class="form-label">Свойства породы</label>
+                            <div class="input-group">
+                                <input type="file" class="form-control" id="rock_properties" name="rock_properties" accept=".csv, .xlsx, .xls">
+                                <button type="button" class="btn btn-outline-secondary" id="preview-rock_properties" style="display: none;">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                            <div class="form-text" id="rock_properties-filename">
+                                {% if project.data and project.data.rock_properties_file %}
+                                    Текущий файл: {{ project.data.rock_properties_file }}
+                                {% endif %}
+                            </div>
+                            <small class="text-muted">Должен содержать колонки: ID_Sample, Porosity_fr, Permeability_mD, Rock_Type.</small>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="capillary_pressure" class="form-label">Капиллярное давление</label>
+                            <div class="input-group">
+                                <input type="file" class="form-control" id="capillary_pressure" name="capillary_pressure" accept=".csv, .xlsx, .xls">
+                                <button type="button" class="btn btn-outline-secondary" id="preview-capillary_pressure" style="display: none;">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                            <div class="form-text" id="capillary_pressure-filename">
+                                {% if project.data and project.data.capillary_pressure_file %}
+                                    Текущий файл: {{ project.data.capillary_pressure_file }}
+                                {% endif %}
+                            </div>
+                            <small class="text-muted">Должен содержать колонки: ID_Sample, Water_Saturation, Pc_Drainage_MPa.</small>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="relative_perm" class="form-label">Относительная проницаемость</label>
+                            <div class="input-group">
+                                <input type="file" class="form-control" id="relative_perm" name="relative_perm" accept=".csv, .xlsx, .xls">
+                                <button type="button" class="btn btn-outline-secondary" id="preview-relative_perm" style="display: none;">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                            <div class="form-text" id="relative_perm-filename">
+                                {% if project.data and project.data.relative_perm_file %}
+                                    Текущий файл: {{ project.data.relative_perm_file }}
+                                {% endif %}
+                            </div>
+                            <small class="text-muted">Должен содержать колонки: ID_Sample, Water_Saturation, Krw_Drainage, Kro_Drainage.</small>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="pvt_data" class="form-label">PVT-данные</label>
+                            <div class="input-group">
+                                <input type="file" class="form-control" id="pvt_data" name="pvt_data" accept=".csv, .xlsx, .xls">
+                                <button type="button" class="btn btn-outline-secondary" id="preview-pvt_data" style="display: none;">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                            <div class="form-text" id="pvt_data-filename">
+                                {% if project.data and project.data.pvt_data_file %}
+                                    Текущий файл: {{ project.data.pvt_data_file }}
+                                {% endif %}
+                            </div>
+                            <small class="text-muted">Должен содержать колонки: Pressure_MPa, Oil_Viscosity_cP и др.</small>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="production_data" class="form-label">Данные добычи</label>
+                            <div class="input-group">
+                                <input type="file" class="form-control" id="production_data" name="production_data" accept=".csv, .xlsx, .xls">
+                                <button type="button" class="btn btn-outline-secondary" id="preview-production_data" style="display: none;">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                            <div class="form-text" id="production_data-filename">
+                                {% if project.data and project.data.production_data_file %}
+                                    Текущий файл: {{ project.data.production_data_file }}
+                                {% endif %}
+                            </div>
+                            <small class="text-muted">Должен содержать колонки: Date, Oil_Rate_m3_day, Water_Rate_m3_day.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Кнопки действий -->
+            <div class="d-flex justify-content-end">
+                <a href="{{ url_for('main.project_details', project_id=project.id) }}" class="btn btn-secondary me-2">Отмена</a>
+                <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Инициализация обработчиков изменения типа модели
+    const modelTypeInputs = document.querySelectorAll('input[name="model_type"]');
+    modelTypeInputs.forEach(input => {
+        input.addEventListener('change', handleModelTypeChange);
+    });
+
+    // Инициализация при загрузке страницы
+    handleModelTypeChange();
+
+    // Инициализация обработчика изменения типа породы
+    const rockTypeSelect = document.querySelector('select[name="rock_type"]');
+    if (rockTypeSelect) {
+        rockTypeSelect.addEventListener('change', handleRockTypeChange);
+    }
+
+    // Инициализация синхронизации ползунков и полей ввода
+    initSliders();
+
+    // Инициализация обработчиков загрузки файлов
+    handleFileUpload();
+
+    // Обработчик отправки формы
+    const projectForm = document.querySelector('#project-form');
+    if (projectForm) {
+        projectForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            // Собираем параметры модели
+            const modelParams = {};
+            document.querySelectorAll('.model-param input[type="number"]').forEach(input => {
+                modelParams[input.name] = input.value;
+            });
+
+            // Проверяем параметры модели
+            validateModelParameters(modelParams)
+                .then(valid => {
+                    if (valid) {
+                        // Если параметры валидны, отправляем форму
+                        projectForm.submit();
+                    } else {
+                        showMessage('Пожалуйста, исправьте ошибки в параметрах модели.', 'danger');
+                    }
+                });
+        });
+    }
+});
+</script>
+{% endblock %}

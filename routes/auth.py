@@ -4,7 +4,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_user, logout_user, current_user, login_required
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
 from extensions import db
@@ -183,7 +183,7 @@ def profile():
 
 @auth_bp.route('/reset_password', methods=['GET', 'POST'])
 def reset_password():
-    """Страница сброса пароля"""
+    """Страница запроса сброса пароля"""
     if current_user.is_authenticated:
         return redirect(url_for('main.dashboard'))
 
@@ -201,10 +201,55 @@ def reset_password():
             flash('Пользователь с таким email не найден', 'danger')
             return redirect(url_for('auth.reset_password'))
 
-        # Отправляем инструкции по сбросу пароля
-        # В реальном приложении здесь будет логика отправки email
-
+        # Временно пропускаем сохранение токена в базу данных
+        # Просто имитируем успешную отправку
         flash('Инструкции по сбросу пароля отправлены на ваш email', 'success')
         return redirect(url_for('auth.login'))
 
     return render_template('auth/reset_password.html')
+
+
+@auth_bp.route('/set_new_password/<token>', methods=['GET', 'POST'])
+def set_new_password(token):
+    """Страница установки нового пароля по токену"""
+    if current_user.is_authenticated:
+        return redirect(url_for('main.dashboard'))
+
+    # Ищем пользователя с указанным токеном
+    user = User.query.filter_by(reset_token=token).first()
+
+    # Проверяем, что токен действителен и не истек
+    if not user or not user.reset_token_expiry or user.reset_token_expiry < datetime.utcnow():
+        flash('Недействительная или истекшая ссылка для сброса пароля', 'danger')
+        return redirect(url_for('auth.reset_password'))
+
+    if request.method == 'POST':
+        password = request.form.get('password')
+        password_confirm = request.form.get('password_confirm')
+
+        # Проверяем, что пароли совпадают
+        if password != password_confirm:
+            flash('Пароли не совпадают', 'danger')
+            return redirect(url_for('auth.set_new_password', token=token))
+
+        # Проверяем длину пароля
+        if len(password) < 8:
+            flash('Пароль должен содержать не менее 8 символов', 'danger')
+            return redirect(url_for('auth.set_new_password', token=token))
+
+        # Обновляем пароль
+        user.set_password(password)
+
+        # Очищаем токен сброса пароля
+        user.reset_token = None
+        user.reset_token_expiry = None
+
+        # Сохраняем изменения
+        db.session.commit()
+
+        flash('Пароль успешно изменен. Теперь вы можете войти в систему', 'success')
+        return redirect(url_for('auth.login'))
+
+    return render_template('auth/set_new_password.html', token=token)
+
+
